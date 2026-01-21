@@ -1,0 +1,462 @@
+import React, { useState } from 'react';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    KeyboardAvoidingView,
+    Platform,
+    Alert,
+    ActivityIndicator,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { theme } from '../styles/theme';
+import { authService } from '../services/authService';
+
+interface WelcomeScreenProps {
+    onComplete: () => void;
+}
+
+type OnboardingStep = 'nickname' | 'optional' | 'privacy';
+
+export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
+    const [step, setStep] = useState<OnboardingStep>('nickname');
+    const [nickname, setNickname] = useState('');
+    const [password, setPassword] = useState('');
+    const [email, setEmail] = useState('');
+    const [isSharing, setIsSharing] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
+    const [checkingNickname, setCheckingNickname] = useState(false);
+
+    // Check nickname availability with debouncing
+    const checkNickname = async (value: string) => {
+        if (value.length < 3) {
+            setNicknameAvailable(null);
+            return;
+        }
+
+        setCheckingNickname(true);
+        try {
+            const available = await authService.checkNicknameAvailability(value);
+            setNicknameAvailable(available);
+        } catch (error) {
+            console.error('Error checking nickname:', error);
+        } finally {
+            setCheckingNickname(false);
+        }
+    };
+
+    const handleNicknameChange = (value: string) => {
+        setNickname(value);
+        // Simple debounce - check after user stops typing
+        setTimeout(() => checkNickname(value), 500);
+    };
+
+    const handleNextFromNickname = () => {
+        if (!nickname.trim()) {
+            Alert.alert('Error', 'Please enter a nickname');
+            return;
+        }
+
+        if (nickname.length < 3) {
+            Alert.alert('Error', 'Nickname must be at least 3 characters');
+            return;
+        }
+
+        if (nicknameAvailable === false) {
+            Alert.alert('Error', 'This nickname is already taken');
+            return;
+        }
+
+        setStep('optional');
+    };
+
+    const handleNextFromOptional = () => {
+        setStep('privacy');
+    };
+
+    const handleSkipOptional = () => {
+        setStep('privacy');
+    };
+
+    const handleSignUp = async () => {
+        setLoading(true);
+
+        try {
+            await authService.signUp(
+                nickname.trim(),
+                password.trim() || undefined,
+                email.trim() || undefined,
+                isSharing
+            );
+
+            onComplete();
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to create account');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const renderStepIndicator = () => (
+        <View style={styles.stepIndicator}>
+            {(['nickname', 'optional', 'privacy'] as OnboardingStep[]).map((s, index) => (
+                <View
+                    key={s}
+                    style={[
+                        styles.stepDot,
+                        step === s && styles.stepDotActive,
+                        ['nickname', 'optional', 'privacy'].indexOf(step) > index && styles.stepDotCompleted,
+                    ]}
+                />
+            ))}
+        </View>
+    );
+
+    return (
+        <LinearGradient
+            colors={[theme.colors.primary, theme.colors.primaryDark, theme.colors.secondary]}
+            style={styles.container}
+        >
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.content}
+            >
+                <View style={styles.header}>
+                    <Text style={styles.emoji}>💩</Text>
+                    <Text style={styles.title}>Friendspo</Text>
+                    <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
+                </View>
+
+                {renderStepIndicator()}
+
+                <View style={styles.form}>
+                    {step === 'nickname' && (
+                        <>
+                            <Text style={styles.stepTitle}>Choose Your Nickname</Text>
+                            <Text style={styles.stepSubtitle}>
+                                This is how your friends will find you
+                            </Text>
+
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Enter nickname"
+                                    placeholderTextColor={theme.colors.textTertiary}
+                                    value={nickname}
+                                    onChangeText={handleNicknameChange}
+                                    autoCapitalize="none"
+                                    maxLength={20}
+                                />
+                                {checkingNickname && (
+                                    <ActivityIndicator
+                                        size="small"
+                                        color={theme.colors.text}
+                                        style={styles.inputIcon}
+                                    />
+                                )}
+                                {!checkingNickname && nicknameAvailable === true && (
+                                    <Text style={[styles.inputIcon, { color: theme.colors.success }]}>✓</Text>
+                                )}
+                                {!checkingNickname && nicknameAvailable === false && (
+                                    <Text style={[styles.inputIcon, { color: theme.colors.danger }]}>✕</Text>
+                                )}
+                            </View>
+
+                            {nicknameAvailable === false && (
+                                <Text style={styles.errorText}>
+                                    This nickname is already taken
+                                </Text>
+                            )}
+
+                            <TouchableOpacity
+                                style={[styles.button, (nicknameAvailable !== true || nickname.length < 3) && styles.buttonDisabled]}
+                                onPress={handleNextFromNickname}
+                                disabled={nicknameAvailable !== true || nickname.length < 3}
+                            >
+                                <Text style={styles.buttonText}>Next →</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+
+                    {step === 'optional' && (
+                        <>
+                            <Text style={styles.stepTitle}>Secure Your Account</Text>
+                            <Text style={styles.stepSubtitle}>
+                                Optional but recommended for account recovery
+                            </Text>
+
+                            <View style={styles.warningBox}>
+                                <Text style={styles.warningText}>
+                                    ⚠️ Adding email & password helps secure your account
+                                </Text>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Email (optional)"
+                                    placeholderTextColor={theme.colors.textTertiary}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    autoComplete="email"
+                                />
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Password (optional)"
+                                    placeholderTextColor={theme.colors.textTertiary}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                />
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.button}
+                                onPress={handleNextFromOptional}
+                            >
+                                <Text style={styles.buttonText}>Next →</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.skipButton}
+                                onPress={handleSkipOptional}
+                            >
+                                <Text style={styles.skipButtonText}>Skip</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+
+                    {step === 'privacy' && (
+                        <>
+                            <Text style={styles.stepTitle}>Privacy Settings</Text>
+                            <Text style={styles.stepSubtitle}>
+                                How do you want to use Friendspo?
+                            </Text>
+
+                            <View style={styles.privacyOptions}>
+                                <TouchableOpacity
+                                    style={[styles.privacyOption, isSharing && styles.privacyOptionActive]}
+                                    onPress={() => setIsSharing(true)}
+                                >
+                                    <Text style={styles.privacyEmoji}>👥</Text>
+                                    <Text style={[styles.privacyTitle, isSharing && styles.privacyTitleActive]}>
+                                        Share with Friends
+                                    </Text>
+                                    <Text style={styles.privacyDescription}>
+                                        Friends can see your activity in their feed
+                                    </Text>
+                                    {isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.privacyOption, !isSharing && styles.privacyOptionActive]}
+                                    onPress={() => setIsSharing(false)}
+                                >
+                                    <Text style={styles.privacyEmoji}>🔒</Text>
+                                    <Text style={[styles.privacyTitle, !isSharing && styles.privacyTitleActive]}>
+                                        Keep Private
+                                    </Text>
+                                    <Text style={styles.privacyDescription}>
+                                        Only you can see your stats (feed disabled)
+                                    </Text>
+                                    {!isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
+                                </TouchableOpacity>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.button, loading && styles.buttonDisabled]}
+                                onPress={handleSignUp}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color={theme.colors.text} />
+                                ) : (
+                                    <Text style={styles.buttonText}>Let's Go! 🚀</Text>
+                                )}
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
+            </KeyboardAvoidingView>
+        </LinearGradient>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    content: {
+        flex: 1,
+        justifyContent: 'center',
+        paddingHorizontal: theme.spacing.lg,
+    },
+    header: {
+        alignItems: 'center',
+        marginBottom: theme.spacing.xl,
+    },
+    emoji: {
+        fontSize: 80,
+        marginBottom: theme.spacing.md,
+    },
+    title: {
+        fontSize: theme.fontSize.xxxl,
+        fontWeight: theme.fontWeight.extrabold,
+        color: theme.colors.text,
+        marginBottom: theme.spacing.xs,
+    },
+    subtitle: {
+        fontSize: theme.fontSize.lg,
+        color: theme.colors.textSecondary,
+        fontWeight: theme.fontWeight.medium,
+    },
+    stepIndicator: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: theme.spacing.sm,
+        marginBottom: theme.spacing.xl,
+    },
+    stepDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    },
+    stepDotActive: {
+        backgroundColor: theme.colors.text,
+        width: 30,
+    },
+    stepDotCompleted: {
+        backgroundColor: theme.colors.success,
+    },
+    form: {
+        width: '100%',
+    },
+    stepTitle: {
+        fontSize: theme.fontSize.xxl,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.text,
+        textAlign: 'center',
+        marginBottom: theme.spacing.sm,
+    },
+    stepSubtitle: {
+        fontSize: theme.fontSize.md,
+        color: theme.colors.textSecondary,
+        textAlign: 'center',
+        marginBottom: theme.spacing.lg,
+    },
+    inputContainer: {
+        marginBottom: theme.spacing.lg,
+        position: 'relative',
+    },
+    input: {
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        borderRadius: theme.borderRadius.md,
+        padding: theme.spacing.md,
+        fontSize: theme.fontSize.md,
+        color: theme.colors.text,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    inputIcon: {
+        position: 'absolute',
+        right: theme.spacing.md,
+        top: '50%',
+        transform: [{ translateY: -10 }],
+        fontSize: 20,
+    },
+    errorText: {
+        color: theme.colors.danger,
+        fontSize: theme.fontSize.sm,
+        marginTop: -theme.spacing.md,
+        marginBottom: theme.spacing.md,
+        textAlign: 'center',
+    },
+    warningBox: {
+        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+        borderRadius: theme.borderRadius.md,
+        padding: theme.spacing.md,
+        marginBottom: theme.spacing.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.warning,
+    },
+    warningText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.sm,
+        textAlign: 'center',
+    },
+    button: {
+        backgroundColor: theme.colors.text,
+        borderRadius: theme.borderRadius.xl,
+        padding: theme.spacing.lg,
+        alignItems: 'center',
+        marginTop: theme.spacing.md,
+        ...theme.shadows.lg,
+    },
+    buttonDisabled: {
+        opacity: 0.6,
+    },
+    buttonText: {
+        color: theme.colors.primary,
+        fontSize: theme.fontSize.lg,
+        fontWeight: theme.fontWeight.bold,
+    },
+    skipButton: {
+        marginTop: theme.spacing.md,
+        alignItems: 'center',
+    },
+    skipButtonText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.md,
+        textDecorationLine: 'underline',
+    },
+    privacyOptions: {
+        gap: theme.spacing.md,
+        marginBottom: theme.spacing.lg,
+    },
+    privacyOption: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.lg,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        position: 'relative',
+    },
+    privacyOptionActive: {
+        borderColor: theme.colors.text,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    privacyEmoji: {
+        fontSize: 40,
+        marginBottom: theme.spacing.sm,
+    },
+    privacyTitle: {
+        fontSize: theme.fontSize.lg,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.textSecondary,
+        marginBottom: theme.spacing.xs,
+    },
+    privacyTitleActive: {
+        color: theme.colors.text,
+    },
+    privacyDescription: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+    },
+    privacyCheckmark: {
+        position: 'absolute',
+        top: theme.spacing.md,
+        right: theme.spacing.md,
+        fontSize: 24,
+        color: theme.colors.success,
+    },
+});
