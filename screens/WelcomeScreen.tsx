@@ -31,6 +31,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
     const [loading, setLoading] = useState(false);
     const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
     const [checkingNickname, setCheckingNickname] = useState(false);
+    const [isSecureExpanded, setIsSecureExpanded] = useState(false);
 
     // Check nickname availability
     const checkNickname = async (value: string) => {
@@ -137,7 +138,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                 <ScrollView
                     contentContainerStyle={styles.scrollContent}
                     keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator={true}
                 >
                     <View style={styles.header}>
                         <Text style={styles.emoji}>💩</Text>
@@ -294,52 +295,66 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                                     <>
                                         <Text style={styles.stepTitle}>Secure Your Account</Text>
                                         <Text style={styles.stepSubtitle}>
-                                            Optional: Add email & password to login later
+                                            Create a password to save your progress
                                         </Text>
 
-                                        <View style={styles.warningBox}>
-                                            <Text style={styles.warningText}>
-                                                ⚠️ Without a password, logging out will delete your account
-                                                permanently!
-                                            </Text>
-                                        </View>
+                                        {/* Expandable Secure Section */}
+                                        <TouchableOpacity
+                                            style={[styles.secureExpandHeader, isSecureExpanded && styles.secureExpandHeaderActive]}
+                                            onPress={() => setIsSecureExpanded(!isSecureExpanded)}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                <Text style={{ fontSize: 24 }}>🔐</Text>
+                                                <View>
+                                                    <Text style={styles.secureOptionTitle}>Add Password & Email</Text>
+                                                    <Text style={styles.secureOptionSubtitle}>Recommended for recovery</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={styles.arrowIcon}>{isSecureExpanded ? '▲' : '▼'}</Text>
+                                        </TouchableOpacity>
 
-                                        <View style={styles.inputContainer}>
-                                            <TextInput
-                                                style={styles.input}
-                                                placeholder="Email (optional)"
-                                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                                value={email}
-                                                onChangeText={setEmail}
-                                                keyboardType="email-address"
-                                                autoCapitalize="none"
-                                            />
-                                        </View>
+                                        {isSecureExpanded && (
+                                            <View style={styles.secureContent}>
+                                                <View style={styles.warningBox}>
+                                                    <Text style={styles.warningText}>
+                                                        ⚠️ Without a password, logging out will delete your account permanently!
+                                                    </Text>
+                                                </View>
 
-                                        <View style={styles.inputContainer}>
-                                            <TextInput
-                                                style={styles.input}
-                                                placeholder="Password (optional)"
-                                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                                value={password}
-                                                onChangeText={setPassword}
-                                                secureTextEntry
-                                                autoCapitalize="none"
-                                            />
-                                        </View>
+                                                <View style={styles.inputContainer}>
+                                                    <TextInput
+                                                        style={styles.input}
+                                                        placeholder="Email (optional)"
+                                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                        value={email}
+                                                        onChangeText={setEmail}
+                                                        keyboardType="email-address"
+                                                        autoCapitalize="none"
+                                                    />
+                                                </View>
 
+                                                <View style={styles.inputContainer}>
+                                                    <TextInput
+                                                        style={styles.input}
+                                                        placeholder="Password"
+                                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                        value={password}
+                                                        onChangeText={setPassword}
+                                                        secureTextEntry
+                                                        autoCapitalize="none"
+                                                    />
+                                                </View>
+                                            </View>
+                                        )}
+
+                                        {/* Primary Action Button */}
                                         <TouchableOpacity
                                             style={styles.button}
                                             onPress={() => setStep('privacy')}
                                         >
-                                            <Text style={styles.buttonText}>Next →</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={styles.skipButton}
-                                            onPress={() => setStep('privacy')}
-                                        >
-                                            <Text style={styles.skipButtonText}>Skip for now</Text>
+                                            <Text style={styles.buttonText}>
+                                                {isSecureExpanded && password ? "Next →" : "Continue without Password"}
+                                            </Text>
                                         </TouchableOpacity>
                                     </>
                                 )}
@@ -359,18 +374,17 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                                                 ]}
                                                 onPress={() => setIsSharing(true)}
                                             >
-                                                <Text style={styles.privacyEmoji}>👥</Text>
-                                                <Text
-                                                    style={[
-                                                        styles.privacyTitle,
-                                                        isSharing && styles.privacyTitleActive,
-                                                    ]}
-                                                >
-                                                    Share with Friends
-                                                </Text>
-                                                <Text style={styles.privacyDescription}>
-                                                    Friends can see your activity in their feed
-                                                </Text>
+                                                <View style={styles.privacyContent}>
+                                                    <Text style={styles.privacyEmoji}>👥</Text>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={[styles.privacyTitle, isSharing && styles.privacyTitleActive]}>
+                                                            Share with Friends
+                                                        </Text>
+                                                        <Text style={styles.privacyDescription}>
+                                                            Shows your timeline to friends
+                                                        </Text>
+                                                    </View>
+                                                </View>
                                                 {isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
                                             </TouchableOpacity>
 
@@ -381,18 +395,17 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                                                 ]}
                                                 onPress={() => setIsSharing(false)}
                                             >
-                                                <Text style={styles.privacyEmoji}>🔒</Text>
-                                                <Text
-                                                    style={[
-                                                        styles.privacyTitle,
-                                                        !isSharing && styles.privacyTitleActive,
-                                                    ]}
-                                                >
-                                                    Keep Private
-                                                </Text>
-                                                <Text style={styles.privacyDescription}>
-                                                    Only you can see your stats (feed disabled)
-                                                </Text>
+                                                <View style={styles.privacyContent}>
+                                                    <Text style={styles.privacyEmoji}>🔒</Text>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={[styles.privacyTitle, !isSharing && styles.privacyTitleActive]}>
+                                                            Keep Private
+                                                        </Text>
+                                                        <Text style={styles.privacyDescription}>
+                                                            Only you can see your stats
+                                                        </Text>
+                                                    </View>
+                                                </View>
                                                 {!isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
                                             </TouchableOpacity>
                                         </View>
@@ -428,9 +441,11 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        justifyContent: 'center',
+        // justifyContent: 'center', // Can cause cut-off on small screens when content is large
+        justifyContent: 'flex-start',
         paddingHorizontal: theme.spacing.lg,
-        paddingVertical: theme.spacing.xl,
+        paddingVertical: theme.spacing.xl, // Increase if needed or keep standard
+        paddingTop: 60, // Ensure header space
     },
     header: {
         alignItems: 'center',
@@ -572,7 +587,7 @@ const styles = StyleSheet.create({
     privacyOption: {
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderRadius: theme.borderRadius.lg,
-        padding: theme.spacing.lg,
+        padding: theme.spacing.md, // Reduced padding
         borderWidth: 2,
         borderColor: 'rgba(255, 255, 255, 0.2)',
         position: 'relative',
@@ -582,8 +597,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     privacyEmoji: {
-        fontSize: 36,
-        marginBottom: theme.spacing.sm,
+        fontSize: 28, // Smaller emoji
+        // marginBottom: theme.spacing.sm, // Removed margin bottom since it's row now
     },
     privacyTitle: {
         fontSize: theme.fontSize.lg,
@@ -602,7 +617,46 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: theme.spacing.md,
         right: theme.spacing.md,
-        fontSize: 24,
+        fontSize: 20,
         color: theme.colors.success,
+    },
+    // Secure Expandable Section Styles
+    secureExpandHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.1)',
+        marginBottom: theme.spacing.md,
+    },
+    secureExpandHeaderActive: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderColor: theme.colors.text,
+    },
+    secureOptionTitle: {
+        fontSize: theme.fontSize.md,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+    },
+    secureOptionSubtitle: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+    },
+    arrowIcon: {
+        fontSize: 16,
+        color: theme.colors.textSecondary,
+    },
+    secureContent: {
+        marginTop: theme.spacing.sm,
+        marginBottom: theme.spacing.lg,
+    },
+    // Compact Privacy Styles
+    privacyContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.md,
     },
 });
