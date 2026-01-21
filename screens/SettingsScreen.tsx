@@ -8,6 +8,9 @@ import {
     Alert,
     Switch,
     Platform,
+    TextInput,
+    Modal,
+    ActivityIndicator,
 } from 'react-native';
 import { theme } from '../styles/theme';
 import { authService } from '../services/authService';
@@ -15,7 +18,7 @@ import { friendService } from '../services/friendService';
 import { User } from '../services/supabase';
 import FriendsOverlay from '../components/FriendsOverlay';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { User as UserIcon, Settings as SettingsIcon, ChevronRight, AlertTriangle } from 'lucide-react-native';
+import { User as UserIcon, Settings as SettingsIcon, ChevronRight, AlertTriangle, Lock, Mail, Key } from 'lucide-react-native';
 
 interface SettingsScreenProps {
     userId: string;
@@ -42,6 +45,14 @@ export default function SettingsScreen({
         isDestructive: false,
         onConfirm: () => { },
     });
+    const [hasPassword, setHasPassword] = useState(true);
+
+    // Account Modal State
+    const [accountModalVisible, setAccountModalVisible] = useState(false);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [updating, setUpdating] = useState(false);
 
     const hideModal = () => {
         setModalConfig(prev => ({ ...prev, visible: false }));
@@ -91,6 +102,42 @@ export default function SettingsScreen({
             setFriends(friendsList);
         } catch (error) {
             console.error('Error loading friends:', error);
+        }
+    };
+
+    const checkPasswordStatus = async () => {
+        const status = await authService.hasPassword();
+        setHasPassword(status);
+    };
+
+    useEffect(() => {
+        checkPasswordStatus();
+    }, []);
+
+    const handleUpdateAccount = async () => {
+        if (!password) {
+            Alert.alert('Error', 'Password is required');
+            return;
+        }
+        if (password !== confirmPassword) {
+            Alert.alert('Error', 'Passwords do not match');
+            return;
+        }
+        if (password.length < 6) {
+            Alert.alert('Error', 'Password must be at least 6 characters');
+            return;
+        }
+
+        setUpdating(true);
+        try {
+            await authService.upgradeUser(password, email.trim() || undefined);
+            Alert.alert('Success', 'Account updated successfully!');
+            setAccountModalVisible(false);
+            setHasPassword(true);
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to update account');
+        } finally {
+            setUpdating(false);
         }
     };
 
@@ -324,6 +371,23 @@ export default function SettingsScreen({
                 </View>
             </View>
 
+            {/* Account Section (Conditional) */}
+            {!hasPassword && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Account</Text>
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => setAccountModalVisible(true)}
+                    >
+                        <View style={styles.menuItemLeft}>
+                            <Text style={styles.menuItemText}>Account Information</Text>
+                            <Text style={styles.menuItemSubtext}>Add email and password to secure account</Text>
+                        </View>
+                        <Lock size={20} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Danger Zone */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Danger Zone</Text>
@@ -359,6 +423,89 @@ export default function SettingsScreen({
                 onConfirm={modalConfig.onConfirm}
                 onCancel={hideModal}
             />
+
+            {/* Account Info Modal */}
+            <Modal
+                visible={accountModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setAccountModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Secure Account</Text>
+                            <TouchableOpacity onPress={() => setAccountModalVisible(false)}>
+                                <Text style={styles.closeText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalDescription}>
+                                Add a password to ensure you can log back in later. Email is optional but recommended for recovery.
+                            </Text>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Email (Optional)</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Mail size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        placeholder="email@example.com"
+                                        placeholderTextColor={theme.colors.textTertiary}
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Password *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Key size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        placeholder="Min. 6 characters"
+                                        placeholderTextColor={theme.colors.textTertiary}
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Confirm Password *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Key size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        placeholder="Retype password"
+                                        placeholderTextColor={theme.colors.textTertiary}
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.saveButton, updating && styles.disabledButton]}
+                                onPress={handleUpdateAccount}
+                                disabled={updating}
+                            >
+                                {updating ? (
+                                    <ActivityIndicator color={theme.colors.text} />
+                                ) : (
+                                    <Text style={styles.saveButtonText}>Save Account Info</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 }
@@ -549,5 +696,88 @@ const styles = StyleSheet.create({
     footerText: {
         fontSize: theme.fontSize.sm,
         color: theme.colors.textTertiary,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        padding: theme.spacing.lg,
+    },
+    modalContainer: {
+        backgroundColor: theme.colors.background,
+        borderRadius: theme.borderRadius.xl,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: theme.spacing.lg,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+        backgroundColor: theme.colors.surface,
+    },
+    modalTitle: {
+        fontSize: theme.fontSize.xl,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.text,
+    },
+    closeText: {
+        color: theme.colors.primary,
+        fontSize: theme.fontSize.md,
+        fontWeight: theme.fontWeight.medium,
+    },
+    modalContent: {
+        padding: theme.spacing.lg,
+    },
+    modalDescription: {
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.md,
+        marginBottom: theme.spacing.xl,
+        lineHeight: 20,
+    },
+    inputContainer: {
+        marginBottom: theme.spacing.lg,
+    },
+    inputLabel: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.bold,
+        marginBottom: theme.spacing.sm,
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.md,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        paddingHorizontal: theme.spacing.md,
+    },
+    inputIcon: {
+        marginRight: theme.spacing.sm,
+    },
+    input: {
+        flex: 1,
+        paddingVertical: theme.spacing.md,
+        color: theme.colors.text,
+        fontSize: theme.fontSize.md,
+    },
+    saveButton: {
+        backgroundColor: theme.colors.primary,
+        padding: theme.spacing.lg,
+        borderRadius: theme.borderRadius.md,
+        alignItems: 'center',
+        marginTop: theme.spacing.sm,
+    },
+    disabledButton: {
+        opacity: 0.7,
+    },
+    saveButtonText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.md,
+        fontWeight: theme.fontWeight.bold,
     },
 });

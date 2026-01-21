@@ -207,4 +207,58 @@ export const authService = {
         await AsyncStorage.removeItem('userId');
         await AsyncStorage.removeItem('nickname');
     },
+    // Upgrade anonymous user to registered user
+    async upgradeUser(password: string, email?: string): Promise<void> {
+        try {
+            const currentUser = await this.getCurrentUser();
+            if (!currentUser) throw new Error('No user to upgrade');
+
+            // 1. Prepare credentials
+            // If no email provided, generate a placeholder that satisfies Supabase
+            // Format: [nickname]_[random]
+            const effectiveEmail = email || `${currentUser.nickname}_${crypto.randomUUID().split('-')[0]}@friendspo.placeholder`;
+
+            console.log('Upgrading user with email:', effectiveEmail);
+
+            // 2. Sign up with Supabase Auth
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: effectiveEmail,
+                password: password,
+            });
+
+            if (authError) throw authError;
+            if (!authData.user) throw new Error('Failed to create auth user');
+
+            const newUserId = authData.user.id;
+            const oldUserId = currentUser.id;
+
+            console.log(`Migrating data from ${oldUserId} to ${newUserId}`);
+
+            // 3. Migrate Data via RPC
+            const { error: rpcError } = await supabase.rpc('migrate_user_data', {
+                old_user_id: oldUserId,
+                new_user_id: newUserId
+            });
+
+            if (rpcError) {
+                // If migration fails, we should probably try to clean up the new auth user?
+                // But generally RPC is transactional.
+                console.error('Migration RPC failed:', rpcError);
+                throw rpcError;
+            }
+
+            // 4. Update Local Storage with new ID
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            await AsyncStorage.setItem('userId', newUserId);
+
+            // 5. Ensure we are signed in (SignUp usually signs in, but let's be safe)
+            // If auto-confirm is not on, this might be tricky. Assuming auto-confirm for now.
+
+            console.log('Upgrade successful');
+
+        } catch (error) {
+            console.error('Upgrade user error:', error);
+            throw error;
+        }
+    },
 };
