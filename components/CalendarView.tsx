@@ -15,7 +15,9 @@ interface CalendarViewProps {
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CALENDAR_PADDING = theme.spacing.lg * 2;
+// Account for StatsScreen margins (lg*2) + Card padding (lg*2)
+const CALENDAR_PADDING = theme.spacing.lg * 4;
+// Subtract gap space (xs * 6)
 const DAY_SIZE = (SCREEN_WIDTH - CALENDAR_PADDING - 6 * theme.spacing.xs) / 7;
 
 export default function CalendarView({ userId }: CalendarViewProps) {
@@ -151,7 +153,7 @@ export default function CalendarView({ userId }: CalendarViewProps) {
 
 const styles = StyleSheet.create({
     container: {
-        padding: theme.spacing.lg,
+        // Padding removed to maximize space
     },
     header: {
         flexDirection: 'row',

@@ -13,7 +13,9 @@ import {
 import { theme } from '../styles/theme';
 import { friendService } from '../services/friendService';
 import { User, FriendshipWithUser } from '../services/supabase';
-import { User as UserIcon, Users, Mail, X } from 'lucide-react-native';
+import { User as UserIcon, Users, Mail, X, Plus, ChevronDown, ChevronUp, PlusCircle, CheckCircle } from 'lucide-react-native';
+import ConfirmationModal from './ConfirmationModal';
+import { Platform } from 'react-native';
 
 interface FriendsOverlayProps {
     visible: boolean;
@@ -32,7 +34,13 @@ export default function FriendsOverlay({
     const [friends, setFriends] = useState<User[]>([]);
     const [requests, setRequests] = useState<FriendshipWithUser[]>([]);
     const [addFriendNickname, setAddFriendNickname] = useState('');
+    const [searchResults, setSearchResults] = useState<User[]>([]);
+    const [showAddSection, setShowAddSection] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    // UI States
+    const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; nickname: string } | null>(null);
+    const [showSuccessToast, setShowSuccessToast] = useState(false);
 
     useEffect(() => {
         if (visible) {
@@ -53,17 +61,46 @@ export default function FriendsOverlay({
         }
     };
 
-    const handleAddFriend = async () => {
-        if (!addFriendNickname.trim()) {
-            Alert.alert('Error', 'Please enter a nickname');
-            return;
-        }
+    // Live search effect
+    useEffect(() => {
+        const search = async () => {
+            if (addFriendNickname.trim().length >= 2) {
+                try {
+                    const results = await friendService.searchUsers(addFriendNickname.trim());
+                    // Filter out self and existing friends
+                    const filtered = results.filter(
+                        user => user.id !== userId && !friends.some(f => f.id === user.id)
+                    );
+                    setSearchResults(filtered);
+                } catch (error) {
+                    console.error('Search error:', error);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        };
 
+        const timeoutId = setTimeout(search, 300); // 300ms debounce
+        return () => clearTimeout(timeoutId);
+    }, [addFriendNickname, userId, friends]);
+
+    const handleSendRequest = async (nickname: string) => {
         setLoading(true);
         try {
-            await friendService.sendFriendRequest(userId, addFriendNickname.trim());
-            Alert.alert('Success', 'Friend request sent!');
+            await friendService.sendFriendRequest(userId, nickname);
+
+            // Show success feedback
+            setShowSuccessToast(true);
             setAddFriendNickname('');
+            setSearchResults([]);
+
+            // Hide feedback and close section after delay
+            setTimeout(() => {
+                setShowSuccessToast(false);
+                setShowAddSection(false);
+                loadData();
+            }, 2000);
+
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to send friend request');
         } finally {
@@ -92,26 +129,20 @@ export default function FriendsOverlay({
         }
     };
 
-    const handleRemoveFriend = async (friendId: string, friendNickname: string) => {
-        Alert.alert(
-            'Remove Friend',
-            `Remove ${friendNickname} from your friends?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Remove',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await friendService.removeFriend(userId, friendId);
-                            loadData();
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message || 'Failed to remove friend');
-                        }
-                    },
-                },
-            ]
-        );
+    const handleRemoveClick = (friendId: string, friendNickname: string) => {
+        setDeleteConfirmation({ id: friendId, nickname: friendNickname });
+    };
+
+    const confirmRemoveFriend = async () => {
+        if (!deleteConfirmation) return;
+
+        try {
+            await friendService.removeFriend(userId, deleteConfirmation.id);
+            loadData();
+            setDeleteConfirmation(null);
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to remove friend');
+        }
     };
 
     const renderFriend = ({ item }: { item: User }) => (
@@ -122,7 +153,7 @@ export default function FriendsOverlay({
             </View>
             <TouchableOpacity
                 style={styles.removeButton}
-                onPress={() => handleRemoveFriend(item.id, item.nickname)}
+                onPress={() => handleRemoveClick(item.id, item.nickname)}
             >
                 <Text style={styles.removeButtonText}>Remove</Text>
             </TouchableOpacity>
@@ -183,27 +214,51 @@ export default function FriendsOverlay({
                         </TouchableOpacity>
                     </View>
 
-                    {/* Add Friend */}
-                    <View style={styles.addFriendSection}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter nickname to add"
-                            placeholderTextColor={theme.colors.textTertiary}
-                            value={addFriendNickname}
-                            onChangeText={setAddFriendNickname}
-                            autoCapitalize="none"
-                        />
+                    {/* Add Friend Section (Collapsible) */}
+                    <View style={styles.addSectionContainer}>
                         <TouchableOpacity
-                            style={[styles.addButton, loading && styles.addButtonDisabled]}
-                            onPress={handleAddFriend}
-                            disabled={loading}
+                            style={styles.addSectionHeader}
+                            onPress={() => setShowAddSection(!showAddSection)}
                         >
-                            {loading ? (
-                                <ActivityIndicator color={theme.colors.text} size="small" />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Plus size={20} color={theme.colors.primary} />
+                                <Text style={styles.addSectionTitle}>Add new Friend</Text>
+                            </View>
+                            {showAddSection ? (
+                                <ChevronUp size={20} color={theme.colors.textSecondary} />
                             ) : (
-                                <Text style={styles.addButtonText}>Add</Text>
+                                <ChevronDown size={20} color={theme.colors.textSecondary} />
                             )}
                         </TouchableOpacity>
+
+                        {showAddSection && (
+                            <View style={styles.addFriendSection}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Search by nickname..."
+                                    placeholderTextColor={theme.colors.textTertiary}
+                                    value={addFriendNickname}
+                                    onChangeText={setAddFriendNickname}
+                                    autoCapitalize="none"
+                                />
+
+                                {/* Search Results */}
+                                {searchResults.length > 0 && (
+                                    <View style={styles.searchResults}>
+                                        {searchResults.map((user) => (
+                                            <TouchableOpacity
+                                                key={user.id}
+                                                style={styles.searchResultItem}
+                                                onPress={() => handleSendRequest(user.nickname)}
+                                            >
+                                                <Text style={styles.searchResultName}>{user.nickname}</Text>
+                                                <PlusCircle size={24} color={theme.colors.success} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+                            </View>
+                        )}
                     </View>
 
                     {/* List */}
@@ -228,7 +283,27 @@ export default function FriendsOverlay({
                         }
                     />
                 </View>
+
+                {/* Success Toast */}
+                {showSuccessToast && (
+                    <View style={styles.toast}>
+                        <CheckCircle size={24} color={theme.colors.success} />
+                        <Text style={styles.toastText}>Friend Request Sent!</Text>
+                    </View>
+                )}
             </View>
+
+            {/* Custom Confirmation Modal */}
+            <ConfirmationModal
+                visible={!!deleteConfirmation}
+                title="Remove Friend"
+                message={`Are you sure you want to remove ${deleteConfirmation?.nickname}? This action cannot be undone.`}
+                confirmText="Remove"
+                cancelText="Keep"
+                isDestructive
+                onConfirm={confirmRemoveFriend}
+                onCancel={() => setDeleteConfirmation(null)}
+            />
         </Modal>
     );
 }
@@ -293,14 +368,48 @@ const styles = StyleSheet.create({
         color: theme.colors.primary,
         fontWeight: theme.fontWeight.bold,
     },
-    addFriendSection: {
-        flexDirection: 'row',
-        padding: theme.spacing.lg,
-        gap: theme.spacing.sm,
+    addSectionContainer: {
         backgroundColor: theme.colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+    },
+    addSectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: theme.spacing.lg,
+    },
+    addSectionTitle: {
+        fontSize: theme.fontSize.md,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.primary,
+    },
+    addFriendSection: {
+        paddingHorizontal: theme.spacing.lg,
+        paddingBottom: theme.spacing.lg,
+        gap: theme.spacing.md,
+    },
+    searchResults: {
+        marginTop: theme.spacing.xs,
+        gap: theme.spacing.sm,
+    },
+    searchResultItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: theme.spacing.md,
+        backgroundColor: theme.colors.background,
+        borderRadius: theme.borderRadius.md,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+    },
+    searchResultName: {
+        fontSize: theme.fontSize.md,
+        color: theme.colors.text,
+        fontWeight: theme.fontWeight.medium,
     },
     input: {
-        flex: 1,
+        width: '100%',
         backgroundColor: theme.colors.background,
         borderRadius: theme.borderRadius.md,
         padding: theme.spacing.md,
@@ -308,22 +417,6 @@ const styles = StyleSheet.create({
         color: theme.colors.text,
         borderWidth: 1,
         borderColor: theme.colors.border,
-    },
-    addButton: {
-        backgroundColor: theme.colors.primary,
-        borderRadius: theme.borderRadius.md,
-        paddingHorizontal: theme.spacing.lg,
-        justifyContent: 'center',
-        alignItems: 'center',
-        minWidth: 80,
-    },
-    addButtonDisabled: {
-        opacity: 0.6,
-    },
-    addButtonText: {
-        color: theme.colors.text,
-        fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.bold,
     },
     list: {
         flex: 1,
@@ -399,5 +492,25 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: theme.fontSize.md,
         color: theme.colors.textSecondary,
+    },
+    toast: {
+        position: 'absolute',
+        top: '10%',
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.full,
+        paddingHorizontal: theme.spacing.xl,
+        paddingVertical: theme.spacing.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.md,
+        ...theme.shadows.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.success,
+        zIndex: 1000,
+    },
+    toastText: {
+        color: theme.colors.text,
+        fontWeight: theme.fontWeight.bold,
+        fontSize: theme.fontSize.md,
     },
 });

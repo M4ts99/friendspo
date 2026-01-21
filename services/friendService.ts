@@ -100,12 +100,17 @@ export const friendService = {
 
     // Remove friend (unfriend)
     async removeFriend(userId: string, friendId: string): Promise<void> {
-        const { error } = await supabase
+        console.log(`friendService: Removing friendship between ${userId} and ${friendId}`);
+        const { error, count } = await supabase
             .from('friendships')
-            .delete()
+            .delete({ count: 'exact' })
             .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`);
 
-        if (error) throw error;
+        if (error) {
+            console.error('friendService: Remove error', error);
+            throw error;
+        }
+        console.log(`friendService: Removed ${count} records`);
     },
 
     // Get pending incoming requests (requests sent TO me)
@@ -155,7 +160,7 @@ export const friendService = {
         return (data || []).map((f: any) => f.users);
     },
 
-    // Search user by nickname
+    // Search user by nickname (Exact match)
     async searchUserByNickname(nickname: string): Promise<User | null> {
         const { data, error } = await supabase
             .from('users')
@@ -165,6 +170,20 @@ export const friendService = {
 
         if (error) throw error;
         return data;
+    },
+
+    // Search users for autocomplete (Partial match)
+    async searchUsers(query: string, limit: number = 3): Promise<User[]> {
+        if (!query || query.length < 2) return [];
+
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .ilike('nickname', `%${query}%`)
+            .limit(limit);
+
+        if (error) throw error;
+        return data || [];
     },
 
     // Get pending request count
