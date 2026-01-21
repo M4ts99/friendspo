@@ -321,6 +321,7 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                 startTime={activeSession ? new Date(activeSession.started_at) : new Date()}
                 onPublish={handlePublish}
                 onDelete={handleDelete}
+                onClose={() => setCompletionModalVisible(false)}
             />
         </View>
     );

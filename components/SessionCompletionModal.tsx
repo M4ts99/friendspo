@@ -12,7 +12,7 @@ import {
     KeyboardAvoidingView,
 } from 'react-native';
 import { theme } from '../styles/theme';
-import { Plus, Minus } from 'lucide-react-native';
+import { Plus, Minus, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface SessionCompletionModalProps {
@@ -21,6 +21,7 @@ interface SessionCompletionModalProps {
     startTime: Date;
     onPublish: (message: string, rating: number) => void;
     onDelete: () => void;
+    onClose: () => void;
 }
 
 export default function SessionCompletionModal({
@@ -29,6 +30,7 @@ export default function SessionCompletionModal({
     startTime,
     onPublish,
     onDelete,
+    onClose,
 }: SessionCompletionModalProps) {
     const [message, setMessage] = useState('');
     const [rating, setRating] = useState(5);
@@ -46,6 +48,12 @@ export default function SessionCompletionModal({
         >
             <View style={styles.dialog}>
                 <View style={styles.header}>
+                    <TouchableOpacity
+                        style={styles.closeButton}
+                        onPress={onClose}
+                    >
+                        <X size={24} color={theme.colors.textSecondary} />
+                    </TouchableOpacity>
                     <Text style={styles.emoji}>🎉</Text>
                     <Text style={styles.title}>Shit Complete!</Text>
                     <Text style={styles.subtitle}>
@@ -157,6 +165,14 @@ const styles = StyleSheet.create({
     header: {
         alignItems: 'center',
         marginBottom: theme.spacing.xl,
+        position: 'relative',
+    },
+    closeButton: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        padding: theme.spacing.sm,
+        zIndex: 1,
     },
     emoji: {
         fontSize: 48,
