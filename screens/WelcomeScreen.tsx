@@ -87,18 +87,24 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
     };
 
     const handleLogin = async () => {
+        console.log('Login attempt:', nickname);
         if (!nickname.trim() || !password.trim()) {
-            Alert.alert('Error', 'Please enter both nickname/email and password');
+            const msg = 'Please enter both nickname/email and password';
+            Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
             return;
         }
 
         setLoading(true);
 
         try {
+            console.log('Calling authService.signIn...');
             await authService.signIn(nickname.trim(), password.trim());
+            console.log('Sign in success, calling onComplete...');
             onComplete();
         } catch (error: any) {
-            Alert.alert('Login Failed', error.message || 'Invalid credentials');
+            console.error('Login error:', error);
+            const msg = error.message || 'Invalid credentials';
+            Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Login Failed', msg);
         } finally {
             setLoading(false);
         }
@@ -139,21 +145,54 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                         <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
                     </View>
 
-                    {/* Login/Signup Toggle Button */}
-                    <TouchableOpacity
-                        style={styles.toggleButton}
-                        onPress={() => {
-                            setIsLoginMode(!isLoginMode);
-                            setStep('nickname');
-                            setPassword('');
-                            setEmail('');
-                            setNicknameAvailable(null);
-                        }}
-                    >
-                        <Text style={styles.toggleButtonText}>
-                            {isLoginMode ? '← Back to Sign Up' : 'Already have an account? Login →'}
-                        </Text>
-                    </TouchableOpacity>
+                    {/* Login/Signup Segmented Control */}
+                    <View style={{
+                        flexDirection: 'row',
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        borderRadius: theme.borderRadius.lg,
+                        padding: 4,
+                        marginBottom: theme.spacing.xl,
+                    }}>
+                        <TouchableOpacity
+                            style={{
+                                flex: 1,
+                                paddingVertical: 12,
+                                alignItems: 'center',
+                                borderRadius: theme.borderRadius.md,
+                                backgroundColor: !isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
+                            }}
+                            onPress={() => {
+                                setIsLoginMode(false);
+                                setStep('nickname');
+                            }}
+                        >
+                            <Text style={{
+                                color: !isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
+                                fontWeight: 'bold',
+                                fontSize: 16,
+                            }}>Sign Up</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={{
+                                flex: 1,
+                                paddingVertical: 12,
+                                alignItems: 'center',
+                                borderRadius: theme.borderRadius.md,
+                                backgroundColor: isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
+                            }}
+                            onPress={() => {
+                                setIsLoginMode(true);
+                                setPassword('');
+                                setEmail('');
+                            }}
+                        >
+                            <Text style={{
+                                color: isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
+                                fontWeight: 'bold',
+                                fontSize: 16,
+                            }}>Login</Text>
+                        </TouchableOpacity>
+                    </View>
 
                     {isLoginMode ? (
                         /* ===== LOGIN MODE ===== */

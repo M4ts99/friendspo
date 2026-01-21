@@ -25,7 +25,9 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
+      console.log('App: Checking auth...');
       const currentUser = await authService.getCurrentUser();
+      console.log('App: User loaded:', currentUser?.id);
       setUser(currentUser);
     } catch (error) {
       console.error('Auth check error:', error);
@@ -40,10 +42,13 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
+      console.log('App: Logging out...');
       await authService.signOut();
+      console.log('App: Sign out complete');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      console.log('App: Clearing user state');
       setUser(null);
     }
   };

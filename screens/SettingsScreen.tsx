@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Alert,
     Switch,
+    Platform,
 } from 'react-native';
 import { theme } from '../styles/theme';
 import { authService } from '../services/authService';
@@ -54,130 +55,143 @@ export default function SettingsScreen({
         }
     };
 
+    const confirmAction = (title: string, message: string, onConfirm: () => void, isDestructive = false) => {
+        if (Platform.OS === 'web') {
+            if (window.confirm(`${title}\n\n${message}`)) {
+                onConfirm();
+            }
+        } else {
+            Alert.alert(
+                title,
+                message,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: isDestructive ? 'Delete' : 'OK',
+                        style: isDestructive ? 'destructive' : 'default',
+                        onPress: onConfirm,
+                    },
+                ]
+            );
+        }
+    };
+
     const handleToggleSharing = async (value: boolean) => {
         try {
             await authService.updatePrivacySettings(userId, value);
             setIsSharingEnabled(value);
 
             if (!value) {
-                Alert.alert(
-                    'Sharing Disabled',
-                    'Your activity feed has been disabled. Friends will not see your sessions.',
-                    [{ text: 'OK', style: 'default' }]
-                );
+                if (Platform.OS === 'web') {
+                    window.alert('Sharing Disabled\n\nYour activity feed has been disabled. Friends will not see your sessions.');
+                } else {
+                    Alert.alert(
+                        'Sharing Disabled',
+                        'Your activity feed has been disabled. Friends will not see your sessions.',
+                        [{ text: 'OK', style: 'default' }]
+                    );
+                }
             }
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to update privacy settings');
+            const msg = error.message || 'Failed to update privacy settings';
+            Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
             // Revert back on error
             setIsSharingEnabled(!value);
         }
     };
 
     const handleDeleteProfile = async () => {
-        Alert.alert(
+        confirmAction(
             '⚠️ Delete Profile',
             'Are you sure you want to delete your profile?\n\nThis will permanently delete:\n• All your sessions\n• All friendships\n• All stats and data\n\nThis action CANNOT be undone!',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete Forever',
-                    style: 'destructive',
-                    onPress: async () => {
-                        // Second confirmation
-                        Alert.alert(
-                            '🛑 Final Warning',
-                            'This is your last chance!\n\nAre you absolutely sure you want to permanently delete your account?',
-                            [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                    text: 'Yes, Delete My Account',
-                                    style: 'destructive',
-                                    onPress: async () => {
-                                        try {
-                                            await authService.deleteProfile(userId);
-                                            Alert.alert('Profile Deleted', 'Your profile has been deleted successfully.');
-                                            onLogout();
-                                        } catch (error: any) {
-                                            Alert.alert('Error', error.message || 'Failed to delete profile');
-                                        }
-                                    },
-                                },
-                            ]
-                        );
+            () => {
+                // Second confirmation
+                confirmAction(
+                    '🛑 Final Warning',
+                    'This is your last chance!\n\nAre you absolutely sure you want to permanently delete your account?',
+                    async () => {
+                        try {
+                            console.log('Deleting profile...');
+                            await authService.deleteProfile(userId);
+                            if (Platform.OS === 'web') window.alert('Profile Deleted: Your profile has been deleted successfully.');
+                            else Alert.alert('Profile Deleted', 'Your profile has been deleted successfully.');
+                            onLogout();
+                        } catch (error: any) {
+                            console.error('Delete profile error:', error);
+                            const msg = error.message || 'Failed to delete profile';
+                            Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
+                        }
                     },
-                },
-            ]
+                    true
+                );
+            },
+            true
         );
     };
 
     const handleRemoveFriend = async (friendId: string, friendNickname: string) => {
-        Alert.alert(
+        confirmAction(
             'Remove Friend',
             `Remove ${friendNickname} from your friends?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Remove',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await friendService.removeFriend(userId, friendId);
-                            loadFriends();
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message || 'Failed to remove friend');
-                        }
-                    },
-                },
-            ]
+            async () => {
+                try {
+                    await friendService.removeFriend(userId, friendId);
+                    loadFriends();
+                } catch (error: any) {
+                    const msg = error.message || 'Failed to remove friend';
+                    Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
+                }
+            },
+            true
         );
     };
 
     const handleLogout = async () => {
-        const hasPassword = await authService.hasPassword();
+        try {
+            console.log('Checking password status...');
+            const hasPassword = await authService.hasPassword();
+            console.log('Has password:', hasPassword);
 
-        if (!hasPassword) {
-            // Warning for passwordless accounts
-            Alert.alert(
-                '⚠️ Warning: No Password Set',
-                'You did not set a password for this account!\n\nIf you logout now, you will NOT be able to log back in and your account will be PERMANENTLY DELETED.\n\nAre you sure you want to logout and delete your account?',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Logout & Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                            try {
-                                // Delete account for passwordless users
-                                await authService.deleteProfile(userId);
-                                onLogout();
-                            } catch (error: any) {
-                                Alert.alert('Error', error.message || 'Failed to logout');
-                            }
-                        },
+            if (!hasPassword) {
+                // Warning for passwordless accounts
+                confirmAction(
+                    '⚠️ Warning: No Password Set',
+                    'You did not set a password for this account!\n\nIf you logout now, you will NOT be able to log back in and your account will be PERMANENTLY DELETED.\n\nAre you sure you want to logout and delete your account?',
+                    async () => {
+                        try {
+                            console.log('Deleting anonymous profile...');
+                            // Delete account for passwordless users
+                            await authService.deleteProfile(userId);
+                            onLogout();
+                        } catch (error: any) {
+                            console.error('Logout delete error:', error);
+                            const msg = error.message || 'Failed to logout';
+                            Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
+                        }
                     },
-                ]
-            );
-        } else {
-            // Normal logout for users with password
-            Alert.alert(
-                'Logout',
-                'Are you sure you want to logout?',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Logout',
-                        style: 'destructive',
-                        onPress: async () => {
-                            try {
-                                await authService.signOut();
-                                onLogout();
-                            } catch (error: any) {
-                                Alert.alert('Error', error.message || 'Failed to logout');
-                            }
-                        },
+                    true
+                );
+            } else {
+                // Normal logout for users with password
+                confirmAction(
+                    'Logout',
+                    'Are you sure you want to logout?',
+                    async () => {
+                        try {
+                            console.log('Signing out...');
+                            await authService.signOut();
+                            onLogout();
+                        } catch (error: any) {
+                            console.error('Sign out error:', error);
+                            const msg = error.message || 'Failed to logout';
+                            Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
+                        }
                     },
-                ]
-            );
+                    true
+                );
+            }
+        } catch (error) {
+            console.error('Handle logout error:', error);
         }
     };
 
