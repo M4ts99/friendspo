@@ -14,6 +14,8 @@ import { authService } from '../services/authService';
 import { friendService } from '../services/friendService';
 import { User } from '../services/supabase';
 import FriendsOverlay from '../components/FriendsOverlay';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { User as UserIcon, Settings as SettingsIcon, ChevronRight, AlertTriangle } from 'lucide-react-native';
 
 interface SettingsScreenProps {
     userId: string;
@@ -29,6 +31,43 @@ export default function SettingsScreen({
     const [isSharingEnabled, setIsSharingEnabled] = useState(true);
     const [friends, setFriends] = useState<User[]>([]);
     const [friendsOverlayVisible, setFriendsOverlayVisible] = useState(false);
+
+    // Confirmation Modal State
+    const [modalConfig, setModalConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
+        isDestructive: false,
+        onConfirm: () => { },
+    });
+
+    const hideModal = () => {
+        setModalConfig(prev => ({ ...prev, visible: false }));
+    };
+
+    const confirmAction = (
+        title: string,
+        message: string,
+        onConfirm: () => void,
+        isDestructive = false,
+        confirmText = isDestructive ? 'Delete' : 'OK',
+        cancelText = 'Cancel'
+    ) => {
+        setModalConfig({
+            visible: true,
+            title,
+            message,
+            onConfirm: () => {
+                hideModal();
+                onConfirm();
+            },
+            isDestructive,
+            confirmText,
+            cancelText,
+        });
+    };
 
     useEffect(() => {
         loadSettings();
@@ -55,26 +94,7 @@ export default function SettingsScreen({
         }
     };
 
-    const confirmAction = (title: string, message: string, onConfirm: () => void, isDestructive = false) => {
-        if (Platform.OS === 'web') {
-            if (window.confirm(`${title}\n\n${message}`)) {
-                onConfirm();
-            }
-        } else {
-            Alert.alert(
-                title,
-                message,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: isDestructive ? 'Delete' : 'OK',
-                        style: isDestructive ? 'destructive' : 'default',
-                        onPress: onConfirm,
-                    },
-                ]
-            );
-        }
-    };
+    // confirmAction replaced by state-based implementation above
 
     const handleToggleSharing = async (value: boolean) => {
         try {
@@ -82,15 +102,14 @@ export default function SettingsScreen({
             setIsSharingEnabled(value);
 
             if (!value) {
-                if (Platform.OS === 'web') {
-                    window.alert('Sharing Disabled\n\nYour activity feed has been disabled. Friends will not see your sessions.');
-                } else {
-                    Alert.alert(
-                        'Sharing Disabled',
-                        'Your activity feed has been disabled. Friends will not see your sessions.',
-                        [{ text: 'OK', style: 'default' }]
-                    );
-                }
+                confirmAction(
+                    'Sharing Disabled',
+                    'Your activity feed has been disabled. Friends will not see your sessions.',
+                    () => { },
+                    false,
+                    'OK',
+                    'Close'
+                );
             }
         } catch (error: any) {
             const msg = error.message || 'Failed to update privacy settings';
@@ -106,26 +125,27 @@ export default function SettingsScreen({
             'Are you sure you want to delete your profile?\n\nThis will permanently delete:\n• All your sessions\n• All friendships\n• All stats and data\n\nThis action CANNOT be undone!',
             () => {
                 // Second confirmation
-                confirmAction(
-                    '🛑 Final Warning',
-                    'This is your last chance!\n\nAre you absolutely sure you want to permanently delete your account?',
-                    async () => {
-                        try {
-                            console.log('Deleting profile...');
-                            await authService.deleteProfile(userId);
-                            if (Platform.OS === 'web') window.alert('Profile Deleted: Your profile has been deleted successfully.');
-                            else Alert.alert('Profile Deleted', 'Your profile has been deleted successfully.');
-                            onLogout();
-                        } catch (error: any) {
-                            console.error('Delete profile error:', error);
-                            const msg = error.message || 'Failed to delete profile';
-                            Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
-                        }
-                    },
-                    true
-                );
+                setTimeout(() => {
+                    confirmAction(
+                        '🛑 Final Warning',
+                        'This is your last chance!\n\nAre you absolutely sure you want to permanently delete your account?',
+                        async () => {
+                            try {
+                                console.log('Deleting profile...');
+                                await authService.deleteProfile(userId);
+                                onLogout();
+                            } catch (error: any) {
+                                console.error('Delete profile error:', error);
+                                Alert.alert('Error', error.message || 'Failed to delete profile');
+                            }
+                        },
+                        true,
+                        'Yes, Delete My Account'
+                    );
+                }, 300);
             },
-            true
+            true,
+            'Delete Forever'
         );
     };
 
@@ -138,11 +158,11 @@ export default function SettingsScreen({
                     await friendService.removeFriend(userId, friendId);
                     loadFriends();
                 } catch (error: any) {
-                    const msg = error.message || 'Failed to remove friend';
-                    Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
+                    Alert.alert('Error', error.message || 'Failed to remove friend');
                 }
             },
-            true
+            true,
+            'Remove'
         );
     };
 
@@ -165,11 +185,11 @@ export default function SettingsScreen({
                             onLogout();
                         } catch (error: any) {
                             console.error('Logout delete error:', error);
-                            const msg = error.message || 'Failed to logout';
-                            Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
+                            Alert.alert('Error', error.message || 'Failed to logout');
                         }
                     },
-                    true
+                    true,
+                    'Logout & Delete'
                 );
             } else {
                 // Normal logout for users with password
@@ -183,11 +203,11 @@ export default function SettingsScreen({
                             onLogout();
                         } catch (error: any) {
                             console.error('Sign out error:', error);
-                            const msg = error.message || 'Failed to logout';
-                            Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
+                            Alert.alert('Error', error.message || 'Failed to logout');
                         }
                     },
-                    true
+                    true,
+                    'Logout'
                 );
             }
         } catch (error) {
@@ -198,7 +218,7 @@ export default function SettingsScreen({
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.headerEmoji}>⚙️</Text>
+                <SettingsIcon size={60} color={theme.colors.text} style={{ marginBottom: theme.spacing.sm }} />
                 <Text style={styles.headerTitle}>Settings</Text>
             </View>
 
@@ -207,7 +227,7 @@ export default function SettingsScreen({
                 <Text style={styles.sectionTitle}>Profile</Text>
 
                 <View style={styles.profileCard}>
-                    <Text style={styles.profileEmoji}>👤</Text>
+                    <UserIcon size={40} color={theme.colors.text} style={{ marginRight: theme.spacing.md }} />
                     <View style={styles.profileInfo}>
                         <Text style={styles.profileLabel}>Nickname</Text>
                         <Text style={styles.profileValue}>{nickname}</Text>
@@ -241,9 +261,12 @@ export default function SettingsScreen({
 
                 {!isSharingEnabled && (
                     <View style={styles.warningBox}>
-                        <Text style={styles.warningText}>
-                            ⚠️ Your activity feed is disabled while sharing is off
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                            <AlertTriangle size={16} color={theme.colors.text} />
+                            <Text style={styles.warningText}>
+                                Your activity feed is disabled while sharing is off
+                            </Text>
+                        </View>
                     </View>
                 )}
             </View>
@@ -257,7 +280,7 @@ export default function SettingsScreen({
                     onPress={() => setFriendsOverlayVisible(true)}
                 >
                     <Text style={styles.menuItemText}>Manage Friends</Text>
-                    <Text style={styles.menuItemIcon}>→</Text>
+                    <ChevronRight size={24} color={theme.colors.primary} />
                 </TouchableOpacity>
 
                 {friends.length > 0 && (
@@ -265,7 +288,7 @@ export default function SettingsScreen({
                         {friends.slice(0, 3).map((friend) => (
                             <View key={friend.id} style={styles.friendItem}>
                                 <View style={styles.friendItemLeft}>
-                                    <Text style={styles.friendEmoji}>👤</Text>
+                                    <UserIcon size={20} color={theme.colors.text} style={{ marginRight: theme.spacing.sm }} />
                                     <Text style={styles.friendNickname}>{friend.nickname}</Text>
                                 </View>
                                 <TouchableOpacity
@@ -325,6 +348,17 @@ export default function SettingsScreen({
                 onClose={() => setFriendsOverlayVisible(false)}
                 onRequestsUpdated={loadFriends}
             />
+
+            <ConfirmationModal
+                visible={modalConfig.visible}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                confirmText={modalConfig.confirmText}
+                cancelText={modalConfig.cancelText}
+                isDestructive={modalConfig.isDestructive}
+                onConfirm={modalConfig.onConfirm}
+                onCancel={hideModal}
+            />
         </ScrollView>
     );
 }
@@ -340,7 +374,6 @@ const styles = StyleSheet.create({
         backgroundColor: theme.colors.surface,
     },
     headerEmoji: {
-        fontSize: 60,
         marginBottom: theme.spacing.sm,
     },
     headerTitle: {
@@ -369,7 +402,6 @@ const styles = StyleSheet.create({
         ...theme.shadows.sm,
     },
     profileEmoji: {
-        fontSize: 40,
         marginRight: theme.spacing.md,
     },
     profileInfo: {

@@ -10,6 +10,7 @@ import {
 import { theme } from '../styles/theme';
 import { statsService, Stats } from '../services/statsService';
 import CalendarView from '../components/CalendarView';
+import { Flame, TrendingUp, BarChart2, Calendar, Timer, Activity, Users, Medal, Zap } from 'lucide-react-native';
 
 interface StatsScreenProps {
     userId: string;
@@ -76,12 +77,12 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
         return `${hour - 12} PM`;
     };
 
-    const getCategoryIcon = (category: LeaderboardCategory): string => {
+    const renderCategoryIcon = (category: LeaderboardCategory, size: number, color: string) => {
         switch (category) {
-            case 'streak': return '🔥';
-            case 'speed': return '⏱️';
-            case 'activity': return '💩';
-            case 'consistency': return '📊';
+            case 'streak': return <Flame size={size} color={color} />;
+            case 'speed': return <Timer size={size} color={color} />;
+            case 'activity': return <Activity size={size} color={color} />;
+            case 'consistency': return <BarChart2 size={size} color={color} />;
         }
     };
 
@@ -152,7 +153,7 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
                     <>
                         {/* Streak Card */}
                         <View style={[styles.card, styles.streakCard]}>
-                            <Text style={styles.streakEmoji}>🔥</Text>
+                            <Flame size={60} color={theme.colors.text} style={{ marginBottom: theme.spacing.sm }} />
                             <Text style={styles.streakNumber}>
                                 {stats?.currentStreak || 0}
                             </Text>
@@ -161,7 +162,10 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
 
                         {/* Regularity Score */}
                         <View style={styles.regularityCard}>
-                            <Text style={styles.regularityTitle}>📈 Regularity Score</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: theme.spacing.sm }}>
+                                <TrendingUp size={24} color={theme.colors.text} />
+                                <Text style={[styles.regularityTitle, { marginBottom: 0 }]}>Regularity Score</Text>
+                            </View>
                             <Text style={styles.regularityScore}>
                                 {stats?.regularityScore || 0}%
                             </Text>
@@ -197,7 +201,10 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
 
                         {/* Detailed Stats */}
                         <View style={styles.detailsCard}>
-                            <Text style={styles.detailsTitle}>📊 Detailed Stats</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: theme.spacing.md }}>
+                                <BarChart2 size={24} color={theme.colors.text} />
+                                <Text style={[styles.detailsTitle, { marginBottom: 0 }]}>Detailed Stats</Text>
+                            </View>
 
                             <View style={styles.detailRow}>
                                 <Text style={styles.detailLabel}>Longest Session</Text>
@@ -237,7 +244,10 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
 
                         {/* Calendar View */}
                         <View style={styles.calendarCard}>
-                            <Text style={styles.calendarTitle}>📅 Activity Calendar</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: theme.spacing.md }}>
+                                <Calendar size={24} color={theme.colors.text} />
+                                <Text style={[styles.calendarTitle, { marginBottom: 0 }]}>Activity Calendar</Text>
+                            </View>
                             <CalendarView userId={userId} />
                         </View>
                     </>
@@ -255,7 +265,9 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
                                     ]}
                                     onPress={() => setLeaderboardCategory(cat)}
                                 >
-                                    <Text style={styles.categoryEmoji}>{getCategoryIcon(cat)}</Text>
+                                    <View style={styles.categoryEmoji}>
+                                        {renderCategoryIcon(cat, 24, leaderboardCategory === cat ? theme.colors.primary : theme.colors.textSecondary)}
+                                    </View>
                                     <Text style={[
                                         styles.categoryText,
                                         leaderboardCategory === cat && styles.categoryTextActive,
@@ -268,13 +280,16 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
 
                         {/* Leaderboard List */}
                         <View style={styles.leaderboardCard}>
-                            <Text style={styles.leaderboardTitle}>
-                                {getCategoryIcon(leaderboardCategory)} {getCategoryLabel(leaderboardCategory)}
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: theme.spacing.md }}>
+                                {renderCategoryIcon(leaderboardCategory, 24, theme.colors.text)}
+                                <Text style={[styles.leaderboardTitle, { marginBottom: 0 }]}>
+                                    {getCategoryLabel(leaderboardCategory)}
+                                </Text>
+                            </View>
 
                             {leaderboard.length === 0 ? (
                                 <View style={styles.emptyLeaderboard}>
-                                    <Text style={styles.emptyEmoji}>👥</Text>
+                                    <Users size={60} color={theme.colors.textSecondary} style={{ marginBottom: theme.spacing.md }} />
                                     <Text style={styles.emptyText}>
                                         Add friends to see the leaderboard!
                                     </Text>
@@ -303,9 +318,10 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
                                         </View>
 
                                         {index < 3 && (
-                                            <Text style={styles.medal}>
-                                                {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                                            </Text>
+                                            <Medal
+                                                size={24}
+                                                color={index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32'}
+                                            />
                                         )}
                                     </View>
                                 ))

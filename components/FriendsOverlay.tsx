@@ -13,6 +13,7 @@ import {
 import { theme } from '../styles/theme';
 import { friendService } from '../services/friendService';
 import { User, FriendshipWithUser } from '../services/supabase';
+import { User as UserIcon, Users, Mail, X } from 'lucide-react-native';
 
 interface FriendsOverlayProps {
     visible: boolean;
@@ -116,7 +117,7 @@ export default function FriendsOverlay({
     const renderFriend = ({ item }: { item: User }) => (
         <View style={styles.listItem}>
             <View style={styles.listItemLeft}>
-                <Text style={styles.listItemEmoji}>👤</Text>
+                <UserIcon size={24} color={theme.colors.text} style={{ marginRight: theme.spacing.sm }} />
                 <Text style={styles.listItemText}>{item.nickname}</Text>
             </View>
             <TouchableOpacity
@@ -131,7 +132,7 @@ export default function FriendsOverlay({
     const renderRequest = ({ item }: { item: FriendshipWithUser }) => (
         <View style={styles.listItem}>
             <View style={styles.listItemLeft}>
-                <Text style={styles.listItemEmoji}>👤</Text>
+                <UserIcon size={24} color={theme.colors.text} style={{ marginRight: theme.spacing.sm }} />
                 <Text style={styles.listItemText}>{item.users.nickname}</Text>
             </View>
             <View style={styles.requestButtons}>
@@ -158,7 +159,7 @@ export default function FriendsOverlay({
                     <View style={styles.header}>
                         <Text style={styles.title}>Friends</Text>
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <Text style={styles.closeButtonText}>✕</Text>
+                            <X size={24} color={theme.colors.textSecondary} />
                         </TouchableOpacity>
                     </View>
 
@@ -213,9 +214,11 @@ export default function FriendsOverlay({
                         style={styles.list}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
-                                <Text style={styles.emptyEmoji}>
-                                    {tab === 'friends' ? '👥' : '📬'}
-                                </Text>
+                                {tab === 'friends' ? (
+                                    <Users size={60} color={theme.colors.textTertiary} style={{ marginBottom: theme.spacing.md }} />
+                                ) : (
+                                    <Mail size={60} color={theme.colors.textTertiary} style={{ marginBottom: theme.spacing.md }} />
+                                )}
                                 <Text style={styles.emptyText}>
                                     {tab === 'friends'
                                         ? 'No friends yet. Add some!'

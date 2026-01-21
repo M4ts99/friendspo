@@ -12,6 +12,7 @@ import HomeScreen from './screens/HomeScreen';
 import StatsScreen from './screens/StatsScreen';
 import FeedScreen from './screens/FeedScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import { Home, BarChart2, Activity, Settings } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator();
 
@@ -83,10 +84,12 @@ export default function App() {
             tabBarLabelStyle: styles.tabBarLabel,
           }}
         >
+
+
           <Tab.Screen
             name="Home"
             options={{
-              tabBarIcon: ({ color, size }) => <TabIcon emoji="🏠" />,
+              tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
             }}
           >
             {() => <HomeScreen userId={user.id} />}
@@ -95,7 +98,7 @@ export default function App() {
           <Tab.Screen
             name="Stats"
             options={{
-              tabBarIcon: ({ color, size }) => <TabIcon emoji="📊" />,
+              tabBarIcon: ({ color, size }) => <BarChart2 color={color} size={size} />,
             }}
           >
             {() => <StatsScreen userId={user.id} />}
@@ -104,7 +107,7 @@ export default function App() {
           <Tab.Screen
             name="Feed"
             options={{
-              tabBarIcon: ({ color, size }) => <TabIcon emoji="📰" />,
+              tabBarIcon: ({ color, size }) => <Activity color={color} size={size} />,
             }}
           >
             {() => <FeedScreen userId={user.id} />}
@@ -113,7 +116,7 @@ export default function App() {
           <Tab.Screen
             name="Settings"
             options={{
-              tabBarIcon: ({ color, size }) => <TabIcon emoji="⚙️" />,
+              tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
             }}
           >
             {() => (
@@ -129,10 +132,6 @@ export default function App() {
     </>
   );
 }
-
-const TabIcon = ({ emoji }: { emoji: string }) => (
-  <RNText style={styles.tabIcon}>{emoji}</RNText>
-);
 
 const styles = StyleSheet.create({
   loadingContainer: {

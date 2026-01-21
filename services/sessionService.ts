@@ -20,7 +20,7 @@ export const sessionService = {
     },
 
     // Stop active session
-    async stopSession(sessionId: string): Promise<Session> {
+    async stopSession(sessionId: string, message?: string, rating?: number): Promise<Session> {
         const endTime = new Date();
 
         // Get the session to calculate duration
@@ -40,6 +40,8 @@ export const sessionService = {
             .update({
                 ended_at: endTime.toISOString(),
                 duration,
+                message,
+                rating,
             })
             .eq('id', sessionId)
             .select()
@@ -47,6 +49,16 @@ export const sessionService = {
 
         if (error) throw error;
         return data;
+    },
+
+    // Delete a session (e.g. if cancelled after stop)
+    async deleteSession(sessionId: string): Promise<void> {
+        const { error } = await supabase
+            .from('sessions')
+            .delete()
+            .eq('id', sessionId);
+
+        if (error) throw error;
     },
 
     // Get active session for user
@@ -87,9 +99,29 @@ export const sessionService = {
             .eq('user_id', userId)
             .eq('status', 'accepted');
 
-        if (!friendships || friendships.length === 0) return [];
+        if (!friendships || friendships.length === 0) {
+            // Even if no friends, show own sessions
+            const { data, error } = await supabase
+                .from('sessions')
+                .select(`
+            *,
+            users (
+              nickname
+            )
+          `)
+                .eq('user_id', userId)
+                .not('ended_at', 'is', null)
+                .eq('is_private', false)
+                .order('started_at', { ascending: false })
+                .limit(limit);
+
+            if (error) throw error;
+            return data || [];
+        }
 
         const friendIds = friendships.map((f) => f.friend_id);
+        // Add own ID to list
+        friendIds.push(userId);
 
         // Get their sessions
         const { data, error } = await supabase

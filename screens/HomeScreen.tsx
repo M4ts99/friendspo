@@ -13,8 +13,10 @@ import { sessionService } from '../services/sessionService';
 import { statsService } from '../services/statsService';
 import { friendService } from '../services/friendService';
 import { Session } from '../services/supabase';
+import { Play, Square, CheckCircle, X } from 'lucide-react-native';
 import StatsHeader from '../components/StatsHeader';
 import FriendsOverlay from '../components/FriendsOverlay';
+import SessionCompletionModal from '../components/SessionCompletionModal';
 
 interface HomeScreenProps {
     userId: string;
@@ -28,6 +30,7 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
     const [avgDuration, setAvgDuration] = useState(0);
     const [pendingRequestCount, setPendingRequestCount] = useState(0);
     const [friendsOverlayVisible, setFriendsOverlayVisible] = useState(false);
+    const [completionModalVisible, setCompletionModalVisible] = useState(false);
     const [lastCompletedSession, setLastCompletedSession] = useState<{ startTime: string; duration: number } | null>(null);
 
     useEffect(() => {
@@ -119,14 +122,18 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
         }
     };
 
-    const handleStopSession = async () => {
+    const handleStopSession = () => {
         if (!activeSession) return;
+        setCompletionModalVisible(true);
+    };
 
+    const handlePublish = async (message: string, rating: number) => {
+        if (!activeSession) return;
         try {
             const sessionStartTime = activeSession.started_at;
             const sessionDuration = elapsedTime;
 
-            await sessionService.stopSession(activeSession.id);
+            await sessionService.stopSession(activeSession.id, message, rating);
 
             // Save completed session info for display
             setLastCompletedSession({
@@ -136,11 +143,24 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
 
             setActiveSession(null);
             setElapsedTime(0);
+            setCompletionModalVisible(false);
 
             // Reload stats after session completes
             loadStats();
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to stop session');
+            Alert.alert('Error', error.message || 'Failed to save session');
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!activeSession) return;
+        try {
+            await sessionService.deleteSession(activeSession.id);
+            setActiveSession(null);
+            setElapsedTime(0);
+            setCompletionModalVisible(false);
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to delete session');
         }
     };
 
@@ -185,7 +205,10 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                                     colors={[theme.colors.danger, theme.colors.dangerLight]}
                                     style={styles.buttonGradient}
                                 >
-                                    <Text style={styles.buttonText}>Stop Shit 🛑</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <Square fill="white" size={24} color="white" />
+                                        <Text style={styles.buttonText}>Stop Shit</Text>
+                                    </View>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </>
@@ -203,7 +226,7 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                                         colors={[theme.colors.primary, theme.colors.primaryDark]}
                                         style={styles.buttonGradient}
                                     >
-                                        <Text style={styles.startButtonEmoji}>💩</Text>
+                                        <Play fill="white" size={60} color="white" style={{ marginBottom: theme.spacing.sm }} />
                                         <Text style={styles.buttonText}>Start Shit</Text>
                                     </LinearGradient>
                                 </TouchableOpacity>
@@ -215,12 +238,15 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                             {lastCompletedSession && (
                                 <View style={styles.savedSessionBox}>
                                     <View style={styles.savedSessionHeader}>
-                                        <Text style={styles.savedSessionTitle}>💩 Saved Shit</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <CheckCircle color={theme.colors.success} size={24} />
+                                            <Text style={styles.savedSessionTitle}>Saved!</Text>
+                                        </View>
                                         <TouchableOpacity
                                             onPress={() => setLastCompletedSession(null)}
                                             style={styles.closeButton}
                                         >
-                                            <Text style={styles.closeButtonText}>✕</Text>
+                                            <X size={20} color={theme.colors.textSecondary} />
                                         </TouchableOpacity>
                                     </View>
                                     <View style={styles.savedSessionRow}>
@@ -250,6 +276,14 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                 userId={userId}
                 onClose={() => setFriendsOverlayVisible(false)}
                 onRequestsUpdated={loadPendingRequests}
+            />
+
+            <SessionCompletionModal
+                visible={completionModalVisible}
+                duration={elapsedTime}
+                startTime={activeSession ? new Date(activeSession.started_at) : new Date()}
+                onPublish={handlePublish}
+                onDelete={handleDelete}
             />
         </View>
     );

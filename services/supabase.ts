@@ -30,6 +30,8 @@ export interface Session {
     ended_at: string;
     duration: number; // in seconds
     is_private: boolean;
+    message?: string;
+    rating?: number;
     created_at: string;
 }
 

@@ -15,6 +15,7 @@ import { authService } from '../services/authService';
 import { friendService } from '../services/friendService';
 import { SessionWithUser } from '../services/supabase';
 import FriendsOverlay from '../components/FriendsOverlay';
+import { User, Lock, Users, Coffee } from 'lucide-react-native';
 
 interface FeedScreenProps {
     userId: string;
@@ -40,7 +41,7 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
         loadFeed();
 
         // Set up real-time subscription (optional enhancement)
-        const interval = setInterval(loadFeed, 30000); // Refresh every 30 seconds
+        const interval = setInterval(loadFeed, 10000); // Refresh every 10 seconds
 
         return () => clearInterval(interval);
     }, [userId]);
@@ -83,7 +84,12 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
         return (
             <View style={styles.feedItem}>
                 <View style={styles.feedIcon}>
-                    <Text style={styles.feedEmoji}>💩</Text>
+                    <User size={24} color={theme.colors.primary} />
+                    {item.rating && (
+                        <View style={styles.ratingBadge}>
+                            <Text style={styles.ratingText}>{item.rating}</Text>
+                        </View>
+                    )}
                 </View>
 
                 <View style={styles.feedContent}>
@@ -92,6 +98,13 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
                         {' '}shitted for{' '}
                         <Text style={styles.feedDuration}>{duration} min</Text>
                     </Text>
+
+                    {item.message && (
+                        <View style={styles.messageBubble}>
+                            <Text style={styles.messageText}>"{item.message}"</Text>
+                        </View>
+                    )}
+
                     <Text style={styles.feedTime}>{timeAgo}</Text>
                 </View>
             </View>
@@ -102,7 +115,7 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
         if (!isSharingEnabled) {
             return (
                 <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyEmoji}>🔒</Text>
+                    <Lock size={48} color={theme.colors.textTertiary} style={styles.emptyIcon} />
                     <Text style={styles.emptyTitle}>Feed Disabled</Text>
                     <Text style={styles.emptyText}>
                         You have sharing disabled. Enable sharing in Settings to see your friends' activity.
@@ -114,7 +127,7 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
         if (!hasFriends) {
             return (
                 <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyEmoji}>👥</Text>
+                    <Users size={48} color={theme.colors.textTertiary} style={styles.emptyIcon} />
                     <Text style={styles.emptyTitle}>No Friends Yet</Text>
                     <Text style={styles.emptyText}>
                         Add friends to see their activity here!
@@ -131,7 +144,7 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
 
         return (
             <View style={styles.emptyContainer}>
-                <Text style={styles.emptyEmoji}>😴</Text>
+                <Coffee size={48} color={theme.colors.textTertiary} style={styles.emptyIcon} />
                 <Text style={styles.emptyTitle}>No Activity</Text>
                 <Text style={styles.emptyText}>
                     Your friends haven't shared anything yet
@@ -238,8 +251,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: theme.spacing.xxl * 2,
     },
-    emptyEmoji: {
-        fontSize: 80,
+    emptyIcon: {
         marginBottom: theme.spacing.lg,
     },
     emptyTitle: {
@@ -266,5 +278,37 @@ const styles = StyleSheet.create({
         color: theme.colors.text,
         fontSize: theme.fontSize.md,
         fontWeight: theme.fontWeight.bold,
+    },
+    ratingBadge: {
+        position: 'absolute',
+        bottom: -5,
+        right: -5,
+        backgroundColor: theme.colors.primary,
+        borderRadius: 12,
+        width: 24,
+        height: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: theme.colors.surface,
+    },
+    ratingText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    messageBubble: {
+        backgroundColor: theme.colors.background,
+        padding: theme.spacing.sm,
+        borderRadius: theme.borderRadius.md,
+        marginTop: theme.spacing.xs,
+        marginBottom: theme.spacing.xs,
+        alignSelf: 'flex-start',
+        maxWidth: '100%',
+    },
+    messageText: {
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.sm,
+        fontStyle: 'italic',
     },
 });

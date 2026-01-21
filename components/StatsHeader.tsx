@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../styles/theme';
+import { Flame, Timer, Users } from 'lucide-react-native';
 
 interface StatsHeaderProps {
     streak: number;
@@ -24,19 +25,19 @@ export default function StatsHeader({
         <View style={styles.container}>
             <View style={styles.statsRow}>
                 <View style={styles.statItem}>
-                    <Text style={styles.statEmoji}>🔥</Text>
+                    <Flame color={theme.colors.primary} size={24} style={styles.icon} />
                     <Text style={styles.statValue}>{streak}</Text>
                     <Text style={styles.statLabel}>Day Streak</Text>
                 </View>
 
                 <View style={styles.statItem}>
-                    <Text style={styles.statEmoji}>⏱️</Text>
+                    <Timer color={theme.colors.secondary} size={24} style={styles.icon} />
                     <Text style={styles.statValue}>{formatTime(avgDuration)}</Text>
                     <Text style={styles.statLabel}>Avg Time</Text>
                 </View>
 
                 <TouchableOpacity style={styles.friendsButton} onPress={onFriendsPress}>
-                    <Text style={styles.friendsEmoji}>👥</Text>
+                    <Users color="#FFF" size={24} />
                     {pendingRequestCount > 0 && (
                         <View style={styles.badge}>
                             <Text style={styles.badgeText}>!</Text>
@@ -65,8 +66,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flex: 1,
     },
-    statEmoji: {
-        fontSize: 24,
+    icon: {
         marginBottom: theme.spacing.xs,
     },
     statValue: {
@@ -88,9 +88,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         position: 'relative',
         ...theme.shadows.md,
-    },
-    friendsEmoji: {
-        fontSize: 24,
     },
     badge: {
         position: 'absolute',
