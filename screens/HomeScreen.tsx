@@ -26,6 +26,7 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
     const [activeSession, setActiveSession] = useState<Session | null>(null);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [pulseAnim] = useState(new Animated.Value(1));
+    const [bgAnim] = useState(new Animated.Value(0));
     const [streak, setStreak] = useState(0);
     const [avgDuration, setAvgDuration] = useState(0);
     const [pendingRequestCount, setPendingRequestCount] = useState(0);
@@ -73,6 +74,27 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                     }),
                 ])
             ).start();
+        }
+    }, [activeSession]);
+
+    useEffect(() => {
+        if (activeSession) {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(bgAnim, {
+                        toValue: 1,
+                        duration: 3000,
+                        useNativeDriver: false, // color interpolation/opacity on views usually supports native driver but let's be safe with layout
+                    }),
+                    Animated.timing(bgAnim, {
+                        toValue: 0,
+                        duration: 3000,
+                        useNativeDriver: false,
+                    }),
+                ])
+            ).start();
+        } else {
+            bgAnim.setValue(0);
         }
     }, [activeSession]);
 
@@ -179,14 +201,29 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                 onFriendsPress={() => setFriendsOverlayVisible(true)}
             />
 
-            <LinearGradient
-                colors={
-                    activeSession
-                        ? [theme.colors.secondary, theme.colors.secondaryDark, theme.colors.primary]
-                        : [theme.colors.background, theme.colors.backgroundLight]
-                }
-                style={styles.gradient}
-            >
+            {/* Main Content Area with Animated Background */}
+            <View style={styles.gradient}>
+                {activeSession ? (
+                    <>
+                        {/* Animated Background Layers */}
+                        <LinearGradient
+                            colors={[theme.colors.primary, theme.colors.primaryDark]}
+                            style={StyleSheet.absoluteFill}
+                        />
+                        <Animated.View style={[StyleSheet.absoluteFill, { opacity: bgAnim }]}>
+                            <LinearGradient
+                                colors={[theme.colors.secondary, theme.colors.secondaryDark]}
+                                style={StyleSheet.absoluteFill}
+                            />
+                        </Animated.View>
+                    </>
+                ) : (
+                    <LinearGradient
+                        colors={[theme.colors.background, theme.colors.backgroundLight]}
+                        style={StyleSheet.absoluteFill}
+                    />
+                )}
+
                 <View style={styles.content}>
                     {activeSession ? (
                         <>
@@ -269,7 +306,7 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                         </>
                     )}
                 </View>
-            </LinearGradient>
+            </View>
 
             <FriendsOverlay
                 visible={friendsOverlayVisible}

@@ -24,26 +24,31 @@ export default function StatsHeader({
     return (
         <View style={styles.container}>
             <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                    <Flame color={theme.colors.primary} size={24} style={styles.icon} />
-                    <Text style={styles.statValue}>{streak}</Text>
-                    <Text style={styles.statLabel}>Day Streak</Text>
-                </View>
-
-                <View style={styles.statItem}>
+                {/* Left: Avg Time */}
+                <View style={[styles.statItem, { alignItems: 'flex-start' }]}>
                     <Timer color={theme.colors.secondary} size={24} style={styles.icon} />
                     <Text style={styles.statValue}>{formatTime(avgDuration)}</Text>
                     <Text style={styles.statLabel}>Avg Time</Text>
                 </View>
 
-                <TouchableOpacity style={styles.friendsButton} onPress={onFriendsPress}>
-                    <Users color="#FFF" size={24} />
-                    {pendingRequestCount > 0 && (
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>!</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
+                {/* Center: Streak (Flame) */}
+                <View style={[styles.statItem, { alignItems: 'center' }]}>
+                    <Flame color={theme.colors.primary} size={32} style={styles.icon} />
+                    <Text style={[styles.statValue, { fontSize: 24 }]}>{streak}</Text>
+                    <Text style={styles.statLabel}>Day Streak</Text>
+                </View>
+
+                {/* Right: Friends Button */}
+                <View style={[styles.statItem, { alignItems: 'flex-end' }]}>
+                    <TouchableOpacity style={styles.friendsButton} onPress={onFriendsPress}>
+                        <Users color="#FFF" size={24} />
+                        {pendingRequestCount > 0 && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>!</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );

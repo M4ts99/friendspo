@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     container: {
         width: '90%',
         maxWidth: 500,
-        height: '70%',
+        maxHeight: '80%', // Limit height to avoid overflow on small screens
         backgroundColor: theme.colors.background,
         borderRadius: theme.borderRadius.xl,
         overflow: 'hidden',

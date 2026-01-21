@@ -46,12 +46,46 @@ export const friendService = {
 
     // Accept friend request
     async acceptFriendRequest(requestId: string): Promise<void> {
-        const { error } = await supabase
+        // 1. Get the request details to know who is who
+        const { data: request, error: fetchError } = await supabase
+            .from('friendships')
+            .select('*')
+            .eq('id', requestId)
+            .single();
+
+        if (fetchError) throw fetchError;
+        if (!request) throw new Error('Request not found');
+
+        // 2. Update the original request status
+        const { error: updateError } = await supabase
             .from('friendships')
             .update({ status: 'accepted' })
             .eq('id', requestId);
 
-        if (error) throw error;
+        if (updateError) throw updateError;
+
+        // 3. Create the reciprocal friendship record so it's mutual
+        // Check if it already exists to avoid duplicates
+        const { data: existingReverse } = await supabase
+            .from('friendships')
+            .select('id')
+            .eq('user_id', request.friend_id) // Me (the acceptor)
+            .eq('friend_id', request.user_id) // Them (the requester)
+            .maybeSingle();
+
+        if (!existingReverse) {
+            const { error: insertError } = await supabase
+                .from('friendships')
+                .insert([
+                    {
+                        user_id: request.friend_id,
+                        friend_id: request.user_id,
+                        status: 'accepted',
+                    },
+                ]);
+
+            if (insertError) throw insertError;
+        }
     },
 
     // Decline friend request
