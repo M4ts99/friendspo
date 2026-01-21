@@ -9,6 +9,7 @@ import {
     Platform,
     Alert,
     ActivityIndicator,
+    ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../styles/theme';
@@ -21,6 +22,7 @@ interface WelcomeScreenProps {
 type OnboardingStep = 'nickname' | 'optional' | 'privacy';
 
 export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
+    const [isLoginMode, setIsLoginMode] = useState(false);
     const [step, setStep] = useState<OnboardingStep>('nickname');
     const [nickname, setNickname] = useState('');
     const [password, setPassword] = useState('');
@@ -30,7 +32,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
     const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
     const [checkingNickname, setCheckingNickname] = useState(false);
 
-    // Check nickname availability with debouncing
+    // Check nickname availability
     const checkNickname = async (value: string) => {
         if (value.length < 3) {
             setNicknameAvailable(null);
@@ -50,35 +52,19 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
 
     const handleNicknameChange = (value: string) => {
         setNickname(value);
-        // Simple debounce - check after user stops typing
-        setTimeout(() => checkNickname(value), 500);
+        if (!isLoginMode) {
+            // Debounce check
+            const timer = setTimeout(() => checkNickname(value), 500);
+            return () => clearTimeout(timer);
+        }
     };
 
     const handleNextFromNickname = () => {
-        if (!nickname.trim()) {
-            Alert.alert('Error', 'Please enter a nickname');
-            return;
-        }
-
-        if (nickname.length < 3) {
-            Alert.alert('Error', 'Nickname must be at least 3 characters');
-            return;
-        }
-
         if (nicknameAvailable === false) {
             Alert.alert('Error', 'This nickname is already taken');
             return;
         }
-
         setStep('optional');
-    };
-
-    const handleNextFromOptional = () => {
-        setStep('privacy');
-    };
-
-    const handleSkipOptional = () => {
-        setStep('privacy');
     };
 
     const handleSignUp = async () => {
@@ -95,6 +81,24 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
             onComplete();
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to create account');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogin = async () => {
+        if (!nickname.trim() || !password.trim()) {
+            Alert.alert('Error', 'Please enter both nickname/email and password');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            await authService.signIn(nickname.trim(), password.trim());
+            onComplete();
+        } catch (error: any) {
+            Alert.alert('Login Failed', error.message || 'Invalid credentials');
         } finally {
             setLoading(false);
         }
@@ -122,96 +126,60 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
         >
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.content}
+                style={styles.keyboardView}
             >
-                <View style={styles.header}>
-                    <Text style={styles.emoji}>💩</Text>
-                    <Text style={styles.title}>Friendspo</Text>
-                    <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
-                </View>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.header}>
+                        <Text style={styles.emoji}>💩</Text>
+                        <Text style={styles.title}>Friendspo</Text>
+                        <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
+                    </View>
 
-                {renderStepIndicator()}
+                    {/* Login/Signup Toggle Button */}
+                    <TouchableOpacity
+                        style={styles.toggleButton}
+                        onPress={() => {
+                            setIsLoginMode(!isLoginMode);
+                            setStep('nickname');
+                            setPassword('');
+                            setEmail('');
+                            setNicknameAvailable(null);
+                        }}
+                    >
+                        <Text style={styles.toggleButtonText}>
+                            {isLoginMode ? '← Back to Sign Up' : 'Already have an account? Login →'}
+                        </Text>
+                    </TouchableOpacity>
 
-                <View style={styles.form}>
-                    {step === 'nickname' && (
-                        <>
-                            <Text style={styles.stepTitle}>Choose Your Nickname</Text>
+                    {isLoginMode ? (
+                        /* ===== LOGIN MODE ===== */
+                        <View style={styles.form}>
+                            <Text style={styles.stepTitle}>Welcome Back! 👋</Text>
                             <Text style={styles.stepSubtitle}>
-                                This is how your friends will find you
+                                Login with your nickname and password
                             </Text>
 
                             <View style={styles.inputContainer}>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Enter nickname"
-                                    placeholderTextColor={theme.colors.textTertiary}
+                                    placeholder="Nickname or Email"
+                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
                                     value={nickname}
-                                    onChangeText={handleNicknameChange}
+                                    onChangeText={setNickname}
                                     autoCapitalize="none"
-                                    maxLength={20}
-                                />
-                                {checkingNickname && (
-                                    <ActivityIndicator
-                                        size="small"
-                                        color={theme.colors.text}
-                                        style={styles.inputIcon}
-                                    />
-                                )}
-                                {!checkingNickname && nicknameAvailable === true && (
-                                    <Text style={[styles.inputIcon, { color: theme.colors.success }]}>✓</Text>
-                                )}
-                                {!checkingNickname && nicknameAvailable === false && (
-                                    <Text style={[styles.inputIcon, { color: theme.colors.danger }]}>✕</Text>
-                                )}
-                            </View>
-
-                            {nicknameAvailable === false && (
-                                <Text style={styles.errorText}>
-                                    This nickname is already taken
-                                </Text>
-                            )}
-
-                            <TouchableOpacity
-                                style={[styles.button, (nicknameAvailable !== true || nickname.length < 3) && styles.buttonDisabled]}
-                                onPress={handleNextFromNickname}
-                                disabled={nicknameAvailable !== true || nickname.length < 3}
-                            >
-                                <Text style={styles.buttonText}>Next →</Text>
-                            </TouchableOpacity>
-                        </>
-                    )}
-
-                    {step === 'optional' && (
-                        <>
-                            <Text style={styles.stepTitle}>Secure Your Account</Text>
-                            <Text style={styles.stepSubtitle}>
-                                Optional but recommended for account recovery
-                            </Text>
-
-                            <View style={styles.warningBox}>
-                                <Text style={styles.warningText}>
-                                    ⚠️ Adding email & password helps secure your account
-                                </Text>
-                            </View>
-
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Email (optional)"
-                                    placeholderTextColor={theme.colors.textTertiary}
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                    autoComplete="email"
+                                    autoCorrect={false}
                                 />
                             </View>
 
                             <View style={styles.inputContainer}>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Password (optional)"
-                                    placeholderTextColor={theme.colors.textTertiary}
+                                    placeholder="Password"
+                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
                                     value={password}
                                     onChangeText={setPassword}
                                     secureTextEntry
@@ -220,72 +188,193 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                             </View>
 
                             <TouchableOpacity
-                                style={styles.button}
-                                onPress={handleNextFromOptional}
-                            >
-                                <Text style={styles.buttonText}>Next →</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.skipButton}
-                                onPress={handleSkipOptional}
-                            >
-                                <Text style={styles.skipButtonText}>Skip</Text>
-                            </TouchableOpacity>
-                        </>
-                    )}
-
-                    {step === 'privacy' && (
-                        <>
-                            <Text style={styles.stepTitle}>Privacy Settings</Text>
-                            <Text style={styles.stepSubtitle}>
-                                How do you want to use Friendspo?
-                            </Text>
-
-                            <View style={styles.privacyOptions}>
-                                <TouchableOpacity
-                                    style={[styles.privacyOption, isSharing && styles.privacyOptionActive]}
-                                    onPress={() => setIsSharing(true)}
-                                >
-                                    <Text style={styles.privacyEmoji}>👥</Text>
-                                    <Text style={[styles.privacyTitle, isSharing && styles.privacyTitleActive]}>
-                                        Share with Friends
-                                    </Text>
-                                    <Text style={styles.privacyDescription}>
-                                        Friends can see your activity in their feed
-                                    </Text>
-                                    {isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.privacyOption, !isSharing && styles.privacyOptionActive]}
-                                    onPress={() => setIsSharing(false)}
-                                >
-                                    <Text style={styles.privacyEmoji}>🔒</Text>
-                                    <Text style={[styles.privacyTitle, !isSharing && styles.privacyTitleActive]}>
-                                        Keep Private
-                                    </Text>
-                                    <Text style={styles.privacyDescription}>
-                                        Only you can see your stats (feed disabled)
-                                    </Text>
-                                    {!isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
-                                </TouchableOpacity>
-                            </View>
-
-                            <TouchableOpacity
                                 style={[styles.button, loading && styles.buttonDisabled]}
-                                onPress={handleSignUp}
+                                onPress={handleLogin}
                                 disabled={loading}
                             >
                                 {loading ? (
-                                    <ActivityIndicator color={theme.colors.text} />
+                                    <ActivityIndicator color={theme.colors.primary} />
                                 ) : (
-                                    <Text style={styles.buttonText}>Let's Go! 🚀</Text>
+                                    <Text style={styles.buttonText}>Login 🚀</Text>
                                 )}
                             </TouchableOpacity>
+                        </View>
+                    ) : (
+                        /* ===== SIGNUP MODE ===== */
+                        <>
+                            {renderStepIndicator()}
+
+                            <View style={styles.form}>
+                                {step === 'nickname' && (
+                                    <>
+                                        <Text style={styles.stepTitle}>Choose Your Nickname</Text>
+                                        <Text style={styles.stepSubtitle}>
+                                            This is how your friends will find you
+                                        </Text>
+
+                                        <View style={styles.inputContainer}>
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="Enter nickname..."
+                                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                value={nickname}
+                                                onChangeText={handleNicknameChange}
+                                                autoCapitalize="none"
+                                                autoCorrect={false}
+                                            />
+                                            {checkingNickname && <Text style={styles.inputIcon}>⏳</Text>}
+                                            {!checkingNickname && nicknameAvailable === true && (
+                                                <Text style={styles.inputIcon}>✓</Text>
+                                            )}
+                                            {!checkingNickname && nicknameAvailable === false && (
+                                                <Text style={styles.inputIcon}>✕</Text>
+                                            )}
+                                        </View>
+
+                                        {nicknameAvailable === false && (
+                                            <Text style={styles.errorText}>
+                                                This nickname is already taken
+                                            </Text>
+                                        )}
+
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.button,
+                                                (!nickname || nicknameAvailable !== true) &&
+                                                styles.buttonDisabled,
+                                            ]}
+                                            onPress={handleNextFromNickname}
+                                            disabled={!nickname || nicknameAvailable !== true}
+                                        >
+                                            <Text style={styles.buttonText}>Next →</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+
+                                {step === 'optional' && (
+                                    <>
+                                        <Text style={styles.stepTitle}>Secure Your Account</Text>
+                                        <Text style={styles.stepSubtitle}>
+                                            Optional: Add email & password to login later
+                                        </Text>
+
+                                        <View style={styles.warningBox}>
+                                            <Text style={styles.warningText}>
+                                                ⚠️ Without a password, logging out will delete your account
+                                                permanently!
+                                            </Text>
+                                        </View>
+
+                                        <View style={styles.inputContainer}>
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="Email (optional)"
+                                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                value={email}
+                                                onChangeText={setEmail}
+                                                keyboardType="email-address"
+                                                autoCapitalize="none"
+                                            />
+                                        </View>
+
+                                        <View style={styles.inputContainer}>
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="Password (optional)"
+                                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                value={password}
+                                                onChangeText={setPassword}
+                                                secureTextEntry
+                                                autoCapitalize="none"
+                                            />
+                                        </View>
+
+                                        <TouchableOpacity
+                                            style={styles.button}
+                                            onPress={() => setStep('privacy')}
+                                        >
+                                            <Text style={styles.buttonText}>Next →</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={styles.skipButton}
+                                            onPress={() => setStep('privacy')}
+                                        >
+                                            <Text style={styles.skipButtonText}>Skip for now</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+
+                                {step === 'privacy' && (
+                                    <>
+                                        <Text style={styles.stepTitle}>Privacy Settings</Text>
+                                        <Text style={styles.stepSubtitle}>
+                                            How do you want to use Friendspo?
+                                        </Text>
+
+                                        <View style={styles.privacyOptions}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.privacyOption,
+                                                    isSharing && styles.privacyOptionActive,
+                                                ]}
+                                                onPress={() => setIsSharing(true)}
+                                            >
+                                                <Text style={styles.privacyEmoji}>👥</Text>
+                                                <Text
+                                                    style={[
+                                                        styles.privacyTitle,
+                                                        isSharing && styles.privacyTitleActive,
+                                                    ]}
+                                                >
+                                                    Share with Friends
+                                                </Text>
+                                                <Text style={styles.privacyDescription}>
+                                                    Friends can see your activity in their feed
+                                                </Text>
+                                                {isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.privacyOption,
+                                                    !isSharing && styles.privacyOptionActive,
+                                                ]}
+                                                onPress={() => setIsSharing(false)}
+                                            >
+                                                <Text style={styles.privacyEmoji}>🔒</Text>
+                                                <Text
+                                                    style={[
+                                                        styles.privacyTitle,
+                                                        !isSharing && styles.privacyTitleActive,
+                                                    ]}
+                                                >
+                                                    Keep Private
+                                                </Text>
+                                                <Text style={styles.privacyDescription}>
+                                                    Only you can see your stats (feed disabled)
+                                                </Text>
+                                                {!isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        <TouchableOpacity
+                                            style={[styles.button, loading && styles.buttonDisabled]}
+                                            onPress={handleSignUp}
+                                            disabled={loading}
+                                        >
+                                            {loading ? (
+                                                <ActivityIndicator color={theme.colors.primary} />
+                                            ) : (
+                                                <Text style={styles.buttonText}>Let's Go! 🚀</Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                            </View>
                         </>
                     )}
-                </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </LinearGradient>
     );
@@ -295,18 +384,22 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    content: {
+    keyboardView: {
         flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
         paddingHorizontal: theme.spacing.lg,
+        paddingVertical: theme.spacing.xl,
     },
     header: {
         alignItems: 'center',
-        marginBottom: theme.spacing.xl,
+        marginBottom: theme.spacing.lg,
     },
     emoji: {
-        fontSize: 80,
-        marginBottom: theme.spacing.md,
+        fontSize: 60,
+        marginBottom: theme.spacing.sm,
     },
     title: {
         fontSize: theme.fontSize.xxxl,
@@ -315,15 +408,27 @@ const styles = StyleSheet.create({
         marginBottom: theme.spacing.xs,
     },
     subtitle: {
-        fontSize: theme.fontSize.lg,
+        fontSize: theme.fontSize.md,
         color: theme.colors.textSecondary,
         fontWeight: theme.fontWeight.medium,
+    },
+    toggleButton: {
+        alignSelf: 'center',
+        paddingVertical: theme.spacing.sm,
+        paddingHorizontal: theme.spacing.md,
+        marginBottom: theme.spacing.lg,
+    },
+    toggleButtonText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.semibold,
+        textDecorationLine: 'underline',
     },
     stepIndicator: {
         flexDirection: 'row',
         justifyContent: 'center',
         gap: theme.spacing.sm,
-        marginBottom: theme.spacing.xl,
+        marginBottom: theme.spacing.lg,
     },
     stepDot: {
         width: 12,
@@ -340,9 +445,11 @@ const styles = StyleSheet.create({
     },
     form: {
         width: '100%',
+        maxWidth: 500,
+        alignSelf: 'center',
     },
     stepTitle: {
-        fontSize: theme.fontSize.xxl,
+        fontSize: theme.fontSize.xl,
         fontWeight: theme.fontWeight.bold,
         color: theme.colors.text,
         textAlign: 'center',
@@ -355,7 +462,7 @@ const styles = StyleSheet.create({
         marginBottom: theme.spacing.lg,
     },
     inputContainer: {
-        marginBottom: theme.spacing.lg,
+        marginBottom: theme.spacing.md,
         position: 'relative',
     },
     input: {
@@ -377,7 +484,7 @@ const styles = StyleSheet.create({
     errorText: {
         color: theme.colors.danger,
         fontSize: theme.fontSize.sm,
-        marginTop: -theme.spacing.md,
+        marginTop: -theme.spacing.sm,
         marginBottom: theme.spacing.md,
         textAlign: 'center',
     },
@@ -385,7 +492,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(245, 158, 11, 0.2)',
         borderRadius: theme.borderRadius.md,
         padding: theme.spacing.md,
-        marginBottom: theme.spacing.lg,
+        marginBottom: theme.spacing.md,
         borderWidth: 1,
         borderColor: theme.colors.warning,
     },
@@ -397,13 +504,13 @@ const styles = StyleSheet.create({
     button: {
         backgroundColor: theme.colors.text,
         borderRadius: theme.borderRadius.xl,
-        padding: theme.spacing.lg,
+        padding: theme.spacing.md,
         alignItems: 'center',
-        marginTop: theme.spacing.md,
+        marginTop: theme.spacing.sm,
         ...theme.shadows.lg,
     },
     buttonDisabled: {
-        opacity: 0.6,
+        opacity: 0.5,
     },
     buttonText: {
         color: theme.colors.primary,
@@ -416,12 +523,12 @@ const styles = StyleSheet.create({
     },
     skipButtonText: {
         color: theme.colors.text,
-        fontSize: theme.fontSize.md,
+        fontSize: theme.fontSize.sm,
         textDecorationLine: 'underline',
     },
     privacyOptions: {
         gap: theme.spacing.md,
-        marginBottom: theme.spacing.lg,
+        marginBottom: theme.spacing.md,
     },
     privacyOption: {
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -436,7 +543,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     privacyEmoji: {
-        fontSize: 40,
+        fontSize: 36,
         marginBottom: theme.spacing.sm,
     },
     privacyTitle: {

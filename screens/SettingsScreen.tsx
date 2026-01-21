@@ -73,23 +73,37 @@ export default function SettingsScreen({
         }
     };
 
-    const handleDeleteProfile = () => {
+    const handleDeleteProfile = async () => {
         Alert.alert(
-            'Delete Profile',
-            'Are you sure you want to delete your profile? This will permanently delete:\n\n• All your sessions\n• All friendships\n• All stats and data\n\nThis action cannot be undone!',
+            '⚠️ Delete Profile',
+            'Are you sure you want to delete your profile?\n\nThis will permanently delete:\n• All your sessions\n• All friendships\n• All stats and data\n\nThis action CANNOT be undone!',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: 'Delete Forever',
                     style: 'destructive',
                     onPress: async () => {
-                        try {
-                            await authService.deleteProfile(userId);
-                            Alert.alert('Profile Deleted', 'Your profile has been deleted.');
-                            onLogout();
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message || 'Failed to delete profile');
-                        }
+                        // Second confirmation
+                        Alert.alert(
+                            '🛑 Final Warning',
+                            'This is your last chance!\n\nAre you absolutely sure you want to permanently delete your account?',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Yes, Delete My Account',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            await authService.deleteProfile(userId);
+                                            Alert.alert('Profile Deleted', 'Your profile has been deleted successfully.');
+                                            onLogout();
+                                        } catch (error: any) {
+                                            Alert.alert('Error', error.message || 'Failed to delete profile');
+                                        }
+                                    },
+                                },
+                            ]
+                        );
                     },
                 },
             ]
@@ -118,26 +132,53 @@ export default function SettingsScreen({
         );
     };
 
-    const handleLogout = () => {
-        Alert.alert(
-            'Logout',
-            'Are you sure you want to logout?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await authService.signOut();
-                            onLogout();
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message || 'Failed to logout');
-                        }
+    const handleLogout = async () => {
+        const hasPassword = await authService.hasPassword();
+
+        if (!hasPassword) {
+            // Warning for passwordless accounts
+            Alert.alert(
+                '⚠️ Warning: No Password Set',
+                'You did not set a password for this account!\n\nIf you logout now, you will NOT be able to log back in and your account will be PERMANENTLY DELETED.\n\nAre you sure you want to logout and delete your account?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Logout & Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                // Delete account for passwordless users
+                                await authService.deleteProfile(userId);
+                                onLogout();
+                            } catch (error: any) {
+                                Alert.alert('Error', error.message || 'Failed to logout');
+                            }
+                        },
                     },
-                },
-            ]
-        );
+                ]
+            );
+        } else {
+            // Normal logout for users with password
+            Alert.alert(
+                'Logout',
+                'Are you sure you want to logout?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Logout',
+                        style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                await authService.signOut();
+                                onLogout();
+                            } catch (error: any) {
+                                Alert.alert('Error', error.message || 'Failed to logout');
+                            }
+                        },
+                    },
+                ]
+            );
+        }
     };
 
     return (

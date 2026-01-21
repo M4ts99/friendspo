@@ -7,6 +7,7 @@ import {
     RefreshControl,
     TouchableOpacity,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../styles/theme';
 import { sessionService } from '../services/sessionService';
 import { statsService } from '../services/statsService';
@@ -26,6 +27,13 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
     const [isSharingEnabled, setIsSharingEnabled] = useState(true);
     const [hasFriends, setHasFriends] = useState(false);
     const [friendsOverlayVisible, setFriendsOverlayVisible] = useState(false);
+
+    // Reload settings when screen gains focus (catches privacy changes)
+    useFocusEffect(
+        React.useCallback(() => {
+            loadUserSettings();
+        }, [userId])
+    );
 
     useEffect(() => {
         loadUserSettings();

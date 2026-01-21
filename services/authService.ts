@@ -55,7 +55,7 @@ export const authService = {
                         {
                             id: userId,
                             nickname,
-                            email: email || null,
+                            email: null,
                             is_sharing_enabled: isSharingEnabled,
                         },
                     ])
@@ -64,7 +64,7 @@ export const authService = {
 
                 if (error) throw error;
 
-                // Store user ID locally
+                // Store userId in local storage for anonymous users
                 const AsyncStorage = require('@react-native-async-storage/async-storage').default;
                 await AsyncStorage.setItem('userId', userId);
                 await AsyncStorage.setItem('nickname', nickname);
@@ -77,10 +77,10 @@ export const authService = {
         }
     },
 
-    // Sign in existing user
+    // Sign in existing user (requires email/password)
     async signIn(identifier: string, password: string) {
         try {
-            // Try email login
+            // Try email login first
             const { data, error } = await supabase.auth.signInWithPassword({
                 email: identifier,
                 password,
@@ -100,6 +100,7 @@ export const authService = {
                         password,
                     });
                 }
+
                 throw error;
             }
 
@@ -112,44 +113,64 @@ export const authService = {
 
     // Sign out
     async signOut() {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-
-        // Clear local storage
-        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-        await AsyncStorage.removeItem('userId');
-        await AsyncStorage.removeItem('nickname');
+        try {
+            await supabase.auth.signOut();
+        } catch (error) {
+            console.error('Sign out error:', error);
+        } finally {
+            // Always clear local storage
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            await AsyncStorage.removeItem('userId');
+            await AsyncStorage.removeItem('nickname');
+        }
     },
 
     // Get current user
     async getCurrentUser() {
-        const { data: { user } } = await supabase.auth.getUser();
+        try {
+            // First try to get authenticated user
+            const { data: { user } } = await supabase.auth.getUser();
 
-        if (user) {
-            const { data } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', user.id)
-                .maybeSingle();
+            if (user) {
+                const { data } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', user.id)
+                    .maybeSingle();
 
-            return data;
+                return data;
+            }
+
+            // Check for anonymous user in local storage
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            const userId = await AsyncStorage.getItem('userId');
+
+            if (userId) {
+                const { data } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', userId)
+                    .maybeSingle();
+
+                return data;
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Get current user error:', error);
+            return null;
         }
+    },
 
-        // Check for anonymous user
-        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-        const userId = await AsyncStorage.getItem('userId');
-
-        if (userId) {
-            const { data } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', userId)
-                .maybeSingle();
-
-            return data;
+    // Check if current user has a password (email set)
+    async hasPassword(): Promise<boolean> {
+        try {
+            const user = await this.getCurrentUser();
+            return !!(user?.email);
+        } catch (error) {
+            console.error('Check password error:', error);
+            return false;
         }
-
-        return null;
     },
 
     // Update privacy settings
@@ -175,7 +196,11 @@ export const authService = {
         if (error) throw error;
 
         // Sign out from Supabase auth (if authenticated user)
-        await supabase.auth.signOut();
+        try {
+            await supabase.auth.signOut();
+        } catch (err) {
+            // Ignore errors if user wasn't authenticated
+        }
 
         // Clear local storage
         const AsyncStorage = require('@react-native-async-storage/async-storage').default;
