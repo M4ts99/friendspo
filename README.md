@@ -2,151 +2,105 @@
 
 A cross-platform toilet tracking app where you can track your bathroom sessions, compare stats with friends, and see who's the champion!
 
-## Features
-
+### Features
 - ⏱️ **Session Tracking**: Start/stop timer for bathroom sessions
 - 🔥 **Streak Tracking**: Keep track of your daily consistency
 - 📊 **Comprehensive Stats**: Average duration, frequency, most active time, and more
 - 📅 **Calendar View**: Visual calendar showing your activity (green/red days)
 - 👥 **Friends Feed**: See when your friends are active
-- 🏆 **Leaderboards**: Compare stats with friends (coming soon)
+- 🏆 **Leaderboards**: Compare stats with friends
+- 🔒 **Secure Account**: Optional email/password protection for your data
 
-## Tech Stack
+---
 
-- **Frontend**: React Native with Expo
-- **Backend**: Supabase (PostgreSQL + Auth + Real-time)
-- **Platforms**: Web, iOS, Android
+## 🛠️ Prerequisites
 
-## Setup Instructions
+Before you start, make sure you have the following installed on your computer:
 
-### 1. Install Dependencies
+1.  **Node.js**: The runtime environment for running JavaScript.
+    *   Download and install the **LTS version** from [nodejs.org](https://nodejs.org/).
+2.  **Git**: For version control.
+    *   Download from [git-scm.com](https://git-scm.com/).
+3.  **VS Code (Visual Studio Code)**: The recommended code editor.
+    *   Download from [code.visualstudio.com](https://code.visualstudio.com/).
+4.  **Expo Go App** (Optional but recommended):
+    *   Download on your phone from the App Store (iOS) or Google Play (Android) to test the app on a real device.
 
+---
+
+## 🚀 Installation & Setup (VS Code)
+
+Follow these steps to set up the project locally:
+
+### 1. Clone the Repository
+Open VS Code. Open the terminal (Terminal -> New Terminal) and run:
+```bash
+git clone https://github.com/M4ts99/friendspo.git
+```
+Then navigate into the folder:
+```bash
+cd friendspo
+```
+
+### 2. Install Dependencies
+Run the following command to install all necessary libraries:
 ```bash
 npm install
 ```
 
-### 2. Configure Supabase
-
-1. Create a Supabase project at https://supabase.com
-2. Create the following tables in your Supabase database:
-
-**users table:**
-```sql
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  nickname TEXT UNIQUE NOT NULL,
-  email TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+### 3. Environment Setup
+You need a `.env` file for your secret keys.
+1. Create a new file named `.env` in the root folder.
+2. Add your Supabase credentials (ask the project owner or check your Supabase dashboard):
+```env
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url_here
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
-**sessions table:**
-```sql
-CREATE TABLE sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  started_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  ended_at TIMESTAMP WITH TIME ZONE,
-  duration INTEGER,
-  is_private BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX idx_sessions_started_at ON sessions(started_at);
-```
-
-**friendships table:**
-```sql
-CREATE TABLE friendships (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  friend_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  status TEXT CHECK (status IN ('pending', 'accepted')),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user_id, friend_id)
-);
-```
-
-3. Update `services/supabase.ts` with your Supabase credentials:
-   - Replace `YOUR_SUPABASE_URL` with your project URL
-   - Replace `YOUR_SUPABASE_ANON_KEY` with your anon key
-
-### 3. Run the App
-
-**For Web:**
+### 4. Run the App
+To start the development server, run:
 ```bash
-npm run web
+npx expo start
 ```
 
-**For iOS (requires Mac + Xcode):**
-```bash
-npm run ios
-```
-
-**For Android (requires Android Studio):**
-```bash
-npm run android
-```
-
-## Project Structure
-
-```
-friendspo/
-├── screens/           # Main app screens
-│   ├── WelcomeScreen.tsx      # Onboarding with nickname
-│   ├── HomeScreen.tsx         # Start/Stop timer
-│   ├── StatsScreen.tsx        # Statistics dashboard
-│   ├── FeedScreen.tsx         # Friends activity feed
-│   └── SettingsScreen.tsx     # Settings & profile
-├── components/        # Reusable components
-│   └── CalendarView.tsx       # Calendar with green/red days
-├── services/          # Business logic & API
-│   ├── supabase.ts           # Supabase client
-│   ├── authService.ts        # Authentication
-│   ├── sessionService.ts     # Session CRUD
-│   └── statsService.ts       # Statistics calculations
-├── styles/            # Design system
-│   └── theme.ts              # Colors, spacing, typography
-└── App.tsx            # Main app entry & navigation
-```
-
-## How It Works
-
-1. **Sign Up**: Enter a unique nickname (optional email/password for account security)
-2. **Track Sessions**: Tap "Start Shit" when you go, "Stop Shit" when done
-3. **View Stats**: Check your personal stats, streaks, and calendar
-4. **Add Friends**: Compete and compare with friends (coming soon)
-5. **Feed**: See your friends' activity in real-time
-
-## Building for Production
-
-**Web:**
-```bash
-npm run build
-```
-
-**iOS/Android:**
-```bash
-eas build --platform ios
-eas build --platform android
-```
-
-(Requires Expo Application Services (EAS) account)
-
-## Future Features
-
-- [ ] Friend requests and management
-- [ ] Achievements and badges
-- [ ] Push notifications
-- [ ] Privacy controls for sessions
-- [ ] Location tags (Home/Work/Out)
-- [ ] Advanced leaderboards
-
-## License
-
-MIT
+*   **For Web:** Press `w` in the terminal to open in your browser.
+*   **For Mobile:** Scan the QR code with the **Expo Go** app on your phone (Android) or Camera app (iOS).
 
 ---
 
+## 🌐 Deployment Pipeline
+
+This repository is configured for **Continuous Deployment**.
+
+### How it works:
+1.  **Push to Main**: Whenever you push changes to the `main` branch, the deployment process triggers automatically.
+2.  **Cloudflare Pages**: The web version of the app is hosted on Cloudflare Pages. It automatically detects the new commit, builds the project, and deploys it live.
+
+### How to trigger a deploy:
+Simply commit your changes and push them:
+```bash
+git add .
+git commit -m "Description of your changes"
+git push origin main
+```
+Once pushed, the website will update automatically within a few minutes.
+
+---
+
+## 📂 Project Structure
+
+```
+friendspo/
+├── screens/           # Main app screens (Home, Feed, Stats, etc.)
+├── components/        # Reusable UI components (Buttons, Modals, Graphs)
+├── services/          # Logic for Database (Supabase) & Calculations
+├── styles/            # Global theme (Colors, Fonts)
+├── assets/            # Images and icons
+└── App.tsx            # Main entry point
+```
+
+## 📜 License
+MIT
+
+---
 Made with 💩 and ❤️
