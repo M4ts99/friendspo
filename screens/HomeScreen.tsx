@@ -65,12 +65,12 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                     Animated.timing(pulseAnim, {
                         toValue: 1.05,
                         duration: 1000,
-                        useNativeDriver: false,
+                        useNativeDriver: true,
                     }),
                     Animated.timing(pulseAnim, {
                         toValue: 1,
                         duration: 1000,
-                        useNativeDriver: false,
+                        useNativeDriver: true,
                     }),
                 ])
             ).start();
@@ -84,12 +84,12 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                     Animated.timing(bgAnim, {
                         toValue: 1,
                         duration: 3000,
-                        useNativeDriver: false, // color interpolation/opacity on views usually supports native driver but let's be safe with layout
+                        useNativeDriver: true, // color interpolation/opacity on views usually supports native driver but let's be safe with layout
                     }),
                     Animated.timing(bgAnim, {
                         toValue: 0,
                         duration: 3000,
-                        useNativeDriver: false,
+                        useNativeDriver: true,
                     }),
                 ])
             ).start();

@@ -100,8 +100,10 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
         try {
             console.log('Calling authService.signIn...');
             await authService.signIn(nickname.trim(), password.trim());
-            console.log('Sign in success, calling onComplete...');
-            onComplete();
+            setTimeout(() => {
+                console.log('Sign in success, calling onComplete...');
+                onComplete();
+            }, 500);
         } catch (error: any) {
             console.error('Login error:', error);
             const msg = error.message || 'Invalid credentials';

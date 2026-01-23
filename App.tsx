@@ -13,23 +13,55 @@ import StatsScreen from './screens/StatsScreen';
 import FeedScreen from './screens/FeedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { Home, BarChart2, Activity, Settings } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './services/supabase';
+import { enableScreens } from 'react-native-screens';
 
 const Tab = createBottomTabNavigator();
+
+// Enable native screens for better performance
+enableScreens(false);
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    const testStorage = async () => {
+      try {
+        await AsyncStorage.setItem('test_key', 'funziona!');
+        const val = await AsyncStorage.getItem('test_key');
+        console.log('Test Storage Locale:', val);
+      } catch (e) {
+        console.error('Critical error: phone can\'t write to storage', e);
+      }
+    };
+
+    testStorage();
     checkAuth();
   }, []);
+
+  const checkStorage = async () => {
+    const allKeys = await AsyncStorage.getAllKeys();
+    console.log('Keys presented in storage:', allKeys);
+  };
 
   const checkAuth = async () => {
     try {
       console.log('App: Checking auth...');
+      
+      // check if session exists
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('App: Does technical session exist?', !!session);
+
       const currentUser = await authService.getCurrentUser();
-      console.log('App: User loaded:', currentUser?.id);
-      setUser(currentUser);
+      if (currentUser) {
+        console.log('App: User loaded with success:', currentUser.id);
+        setUser(currentUser);
+      } else {
+        console.log('App: No user found');
+        setUser(null);
+      }
     } catch (error) {
       console.error('Auth check error:', error);
     } finally {
@@ -38,7 +70,9 @@ export default function App() {
   };
 
   const handleAuthComplete = async () => {
-    await checkAuth();
+    console.log('App: Authentication complete, checking auth state...');
+    setIsLoading(true);
+    setTimeout(async () => await checkAuth(), 1000);
   };
 
   const handleLogout = async () => {
@@ -130,7 +164,7 @@ export default function App() {
         </Tab.Navigator>
       </NavigationContainer>
     </>
-  );
+  ); 
 }
 
 const styles = StyleSheet.create({

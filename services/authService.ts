@@ -87,6 +87,11 @@ export const authService = {
             });
 
             if (error) {
+                console.error("SUPABASE ERROR:", error.message); 
+                throw error;
+            }
+
+            if (error) {
                 // Try nickname lookup
                 const { data: userData } = await supabase
                     .from('users')
@@ -102,6 +107,9 @@ export const authService = {
                 }
 
                 throw error;
+            }
+            if (data.session) {
+                await supabase.auth.setSession(data.session);
             }
 
             return data;
@@ -129,9 +137,15 @@ export const authService = {
     async getCurrentUser() {
         try {
             // First try to get authenticated user
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user }, error : authError } = await supabase.auth.getUser();
+
+            console.log('Get current user - supabase auth user:', user);
+            if (authError) {
+                console.error('Get current user auth error:', authError);
+            }
 
             if (user) {
+                console.log('Authenticated user found:', user.id);
                 const { data } = await supabase
                     .from('users')
                     .select('*')
