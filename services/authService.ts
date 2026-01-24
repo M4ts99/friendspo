@@ -157,7 +157,10 @@ export const authService = {
     // Get current user
     async getCurrentUser() {
         try {
+            console.log('🔍 [GET_USER] Starting getCurrentUser...');
+
             // First try to get authenticated user
+            console.log('🔍 [GET_USER] Calling supabase.auth.getUser()...');
             const { data: { user }, error: authError } = await supabase.auth.getUser();
 
             console.log('Get current user - supabase auth user:', user);
@@ -167,29 +170,45 @@ export const authService = {
 
             if (user) {
                 console.log('Authenticated user found:', user.id);
-                const { data } = await supabase
+                console.log('🔍 [GET_USER] Querying users table for authenticated user...');
+
+                const { data, error: dbError } = await supabase
                     .from('users')
                     .select('*')
                     .eq('id', user.id)
                     .maybeSingle();
 
+                if (dbError) {
+                    console.error('❌ [GET_USER] Database error:', dbError);
+                }
+
+                console.log('🔍 [GET_USER] Database result:', data);
                 return data;
             }
 
             // Check for anonymous user in local storage
+            console.log('🔍 [GET_USER] No auth user, checking local storage...');
             const AsyncStorage = require('@react-native-async-storage/async-storage').default;
             const userId = await AsyncStorage.getItem('userId');
+            console.log('🔍 [GET_USER] Local storage userId:', userId);
 
             if (userId) {
-                const { data } = await supabase
+                console.log('🔍 [GET_USER] Querying users table for anonymous user...');
+                const { data, error: dbError } = await supabase
                     .from('users')
                     .select('*')
                     .eq('id', userId)
                     .maybeSingle();
 
+                if (dbError) {
+                    console.error('❌ [GET_USER] Database error:', dbError);
+                }
+
+                console.log('🔍 [GET_USER] Database result:', data);
                 return data;
             }
 
+            console.log('🔍 [GET_USER] No user found, returning null');
             return null;
         } catch (error) {
             console.error('Get current user error:', error);
