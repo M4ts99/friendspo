@@ -15,6 +15,7 @@ import { authService } from '../services/authService';
 import { friendService } from '../services/friendService';
 import { SessionWithUser } from '../services/supabase';
 import FriendsOverlay from '../components/FriendsOverlay';
+import StarRating from '../components/StarRating';
 import { User, Lock, Users, Coffee } from 'lucide-react-native';
 
 interface FeedScreenProps {
@@ -85,17 +86,18 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
             <View style={styles.feedItem}>
                 <View style={styles.feedIcon}>
                     <User size={24} color={theme.colors.primary} />
-                    {item.rating && (
-                        <View style={styles.ratingBadge}>
-                            <Text style={styles.ratingText}>{item.rating}</Text>
-                        </View>
-                    )}
                 </View>
-
                 <View style={styles.feedContent}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.feedText}>
+                            <Text style={styles.feedNickname}>{item.users.nickname}</Text>
+                        </Text>
+                        {item.rating && (
+                            <StarRating rating={item.rating} size={14} />
+                        )}
+                    </View>
                     <Text style={styles.feedText}>
-                        <Text style={styles.feedNickname}>{item.users.nickname}</Text>
-                        {' '}shitted for{' '}
+                        shitted for{' '}
                         <Text style={styles.feedDuration}>{duration} min</Text>
                     </Text>
 
@@ -279,24 +281,12 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.md,
         fontWeight: theme.fontWeight.bold,
     },
-    ratingBadge: {
-        position: 'absolute',
-        bottom: -5,
-        right: -5,
-        backgroundColor: theme.colors.primary,
-        borderRadius: 12,
-        width: 24,
-        height: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: theme.colors.surface,
+    addFriendButtonText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.md,
+        fontWeight: theme.fontWeight.bold,
     },
-    ratingText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
+    // Removed old rating styles
     messageBubble: {
         backgroundColor: theme.colors.background,
         padding: theme.spacing.sm,
