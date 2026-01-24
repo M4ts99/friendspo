@@ -159,9 +159,27 @@ export const authService = {
         try {
             console.log('🔍 [GET_USER] Starting getCurrentUser...');
 
-            // First try to get authenticated user
+            // First try to get authenticated user with timeout
             console.log('🔍 [GET_USER] Calling supabase.auth.getUser()...');
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+            let user = null;
+            let authError = null;
+
+            try {
+                // Add timeout to prevent infinite hanging
+                const userPromise = supabase.auth.getUser();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('getUser timeout')), 5000)
+                );
+
+                const result = await Promise.race([userPromise, timeoutPromise]) as any;
+                user = result.data?.user;
+                authError = result.error;
+                console.log('🔍 [GET_USER] getUser() completed');
+            } catch (error) {
+                console.warn('⚠️ [GET_USER] getUser() failed or timed out:', error);
+                // Continue to local storage check
+            }
 
             console.log('Get current user - supabase auth user:', user);
             if (authError) {
