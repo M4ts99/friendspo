@@ -200,10 +200,14 @@ export const authService = {
     // Check if current user has a password (email set)
     async hasPassword(): Promise<boolean> {
         try {
+            console.log('🔍 [HAS_PASSWORD] Checking if user has password...');
             const user = await this.getCurrentUser();
-            return !!(user?.email);
+            console.log('🔍 [HAS_PASSWORD] User:', user?.id, 'Email:', user?.email);
+            const result = !!(user?.email);
+            console.log('🔍 [HAS_PASSWORD] Result:', result);
+            return result;
         } catch (error) {
-            console.error('Check password error:', error);
+            console.error('❌ [HAS_PASSWORD] Check password error:', error);
             return false;
         }
     },
