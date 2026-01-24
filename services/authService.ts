@@ -272,6 +272,27 @@ export const authService = {
                 throw rpcError;
             }
 
+            // Update email in users table (the RPC doesn't update email)
+            const { error: emailUpdateError } = await supabase
+                .from('users')
+                .update({ email: email })
+                .eq('id', newUserId);
+
+            if (emailUpdateError) {
+                console.error('Failed to update email in users table:', emailUpdateError);
+            }
+
+            // Sign in with the new credentials to establish session
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (signInError) {
+                console.error('Failed to sign in after upgrade:', signInError);
+                throw new Error('Account created but login failed. Please try logging in manually.');
+            }
+
             // Update Local Storage with new ID
             const AsyncStorage = require('@react-native-async-storage/async-storage').default;
             await AsyncStorage.setItem('userId', newUserId);
