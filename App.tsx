@@ -122,10 +122,14 @@ export default function App() {
       console.log('App: Checking auth...');
 
       // check if session exists
+      console.log('🔍 [APP] Calling supabase.auth.getSession()...');
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('🔍 [APP] getSession() completed');
       console.log('App: Does technical session exist?', !!session);
 
+      console.log('🔍 [APP] Calling authService.getCurrentUser()...');
       const currentUser = await authService.getCurrentUser();
+      console.log('🔍 [APP] getCurrentUser() completed');
 
       // NOTE: Orphaned session cleanup has been removed from here
       // It was causing race conditions with the sign up process
