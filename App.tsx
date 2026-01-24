@@ -128,22 +128,41 @@ export default function App() {
       const currentUser = await authService.getCurrentUser();
 
       // ORPHANED SESSION DETECTION
-      // If we have a Supabase session but no user in the database, clean it up
+      // If we have a Supabase session but no user in the database, it might be:
+      // 1. An orphaned session from old placeholder emails (needs cleanup)
+      // 2. A fresh sign up that hasn't written to DB yet (needs time)
       if (session && !currentUser) {
-        console.warn('⚠️ [APP] Orphaned session detected! Supabase auth exists but no user record.');
-        console.log('🔧 [APP] Cleaning up orphaned session...');
+        console.warn('⚠️ [APP] Session exists but no user record found.');
+        console.log('🔧 [APP] Waiting 1 second to allow fresh sign ups to complete...');
 
-        try {
-          await supabase.auth.signOut();
-          await AsyncStorage.clear();
-          console.log('✅ [APP] Orphaned session cleaned up successfully');
-        } catch (cleanupError) {
-          console.error('❌ [APP] Failed to clean up orphaned session:', cleanupError);
+        // Wait 1 second to give fresh sign ups time to write to the database
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Check again after delay
+        const currentUserAfterDelay = await authService.getCurrentUser();
+
+        if (!currentUserAfterDelay) {
+          // Still no user after delay - this is truly an orphaned session
+          console.warn('⚠️ [APP] Confirmed orphaned session! Cleaning up...');
+
+          try {
+            await supabase.auth.signOut();
+            await AsyncStorage.clear();
+            console.log('✅ [APP] Orphaned session cleaned up successfully');
+          } catch (cleanupError) {
+            console.error('❌ [APP] Failed to clean up orphaned session:', cleanupError);
+          }
+
+          setUser(null);
+          setIsLoading(false);
+          return;
+        } else {
+          // User was created during the delay - fresh sign up!
+          console.log('✅ [APP] Fresh sign up detected, user created:', currentUserAfterDelay.id);
+          setUser(currentUserAfterDelay);
+          setIsLoading(false);
+          return;
         }
-
-        setUser(null);
-        setIsLoading(false);
-        return;
       }
 
       if (currentUser) {

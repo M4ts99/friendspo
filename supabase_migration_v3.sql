@@ -9,7 +9,16 @@ RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER -- Run as database owner to bypass RLS during migration
 AS $$
+DECLARE
+  old_nickname TEXT;
+  old_sharing_enabled BOOLEAN;
 BEGIN
+  -- 0. Store old user's data in variables BEFORE deleting
+  SELECT nickname, is_sharing_enabled 
+  INTO old_nickname, old_sharing_enabled
+  FROM users 
+  WHERE id = old_user_id;
+
   -- 1. Transfer Sessions
   UPDATE sessions 
   SET user_id = new_user_id 
@@ -25,14 +34,12 @@ BEGIN
   SET friend_id = new_user_id 
   WHERE friend_id = old_user_id;
 
-  -- 4. Create new user profile with old user's data
-  -- Insert the new user with the old user's nickname and settings
-  INSERT INTO users (id, nickname, is_sharing_enabled, email)
-  SELECT new_user_id, nickname, is_sharing_enabled, NULL
-  FROM users
-  WHERE id = old_user_id;
-
-  -- 5. Delete the old guest user
+  -- 4. Delete the old guest user FIRST (to free up the nickname)
   DELETE FROM users WHERE id = old_user_id;
+
+  -- 5. Create new user profile with old user's data
+  INSERT INTO users (id, nickname, is_sharing_enabled, email)
+  VALUES (new_user_id, old_nickname, old_sharing_enabled, NULL);
 END;
 $$;
+
