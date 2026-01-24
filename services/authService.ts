@@ -274,6 +274,24 @@ export const authService = {
             const oldUserId = currentUser.id;
 
             console.log('✅ [UPGRADE] Supabase user created:', newUserId);
+
+            // CRITICAL: Create the new user entry in users table BEFORE migration
+            console.log('🔄 [UPGRADE] Creating new user entry in users table...');
+            const { error: createUserError } = await supabase
+                .from('users')
+                .insert([{
+                    id: newUserId,
+                    nickname: currentUser.nickname,
+                    email: email,
+                    is_sharing_enabled: currentUser.is_sharing_enabled
+                }]);
+
+            if (createUserError) {
+                console.error('❌ [UPGRADE] Failed to create new user entry:', createUserError);
+                throw new Error('Failed to create user profile');
+            }
+
+            console.log('✅ [UPGRADE] New user entry created');
             console.log('🔄 [UPGRADE] Migrating data from', oldUserId, 'to', newUserId);
 
             // Migrate Data via RPC
