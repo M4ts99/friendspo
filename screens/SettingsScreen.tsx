@@ -140,6 +140,8 @@ export default function SettingsScreen({
     }, []);
 
     const handleUpdateAccount = async () => {
+        if (updating) return; // Prevent multiple calls
+
         if (!email || !email.includes('@')) {
             Alert.alert('Error', 'A valid email address is required');
             return;
@@ -165,8 +167,9 @@ export default function SettingsScreen({
             setEmail('');
             setPassword('');
             setConfirmPassword('');
-            loadAccountInfo();
+            await loadAccountInfo();
         } catch (error: any) {
+            console.error('Update account error:', error);
             Alert.alert('Error', error.message || 'Failed to update account');
         } finally {
             setUpdating(false);

@@ -106,6 +106,15 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
                 isSharing
             );
 
+            // Wait a bit to ensure the user is created in the database
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Verify user was created before proceeding
+            const user = await authService.getCurrentUser();
+            if (!user) {
+                throw new Error('Failed to create user account. Please try again.');
+            }
+
             onComplete();
         } catch (error: any) {
             if (error.message && error.message.includes('USER_EXISTS')) {
