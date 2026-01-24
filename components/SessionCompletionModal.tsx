@@ -14,6 +14,7 @@ import {
 import { theme } from '../styles/theme';
 import { Plus, Minus, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import StarRating from './StarRating';
 
 interface SessionCompletionModalProps {
     visible: boolean;
@@ -63,29 +64,14 @@ export default function SessionCompletionModal({
 
                 {/* Rating Section */}
                 <View style={styles.section}>
-                    <Text style={styles.label}>How was it? (1-10)</Text>
+                    <Text style={styles.label}>How was it? ({rating}/10)</Text>
                     <View style={styles.ratingContainer}>
-                        <TouchableOpacity
-                            style={styles.ratingButton}
-                            onPress={() => setRating(Math.max(1, rating - 1))}
-                        >
-                            <Minus size={24} color={theme.colors.text} />
-                        </TouchableOpacity>
-
-                        <View style={styles.ratingValueContainer}>
-                            <Text style={styles.ratingValue}>{rating}</Text>
-                            <Text style={styles.ratingScale}>/10</Text>
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.ratingButton}
-                            onPress={() => setRating(Math.min(10, rating + 1))}
-                        >
-                            <Plus size={24} color={theme.colors.text} />
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.ratingBar}>
-                        <View style={[styles.ratingFill, { width: `${rating * 10}%` }]} />
+                        <StarRating
+                            rating={rating}
+                            onRatingChange={setRating}
+                            interactive={true}
+                            size={48}
+                        />
                     </View>
                 </View>
 
@@ -203,47 +189,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: theme.spacing.md,
     },
-    ratingButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: theme.colors.surfaceLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    ratingButtonText: {
-        fontSize: 24,
-        color: theme.colors.text,
-        fontWeight: 'bold',
-        lineHeight: 28,
-    },
-    ratingValueContainer: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        marginHorizontal: theme.spacing.xl,
-        width: 80,
-        justifyContent: 'center',
-    },
-    ratingValue: {
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: theme.colors.primary,
-    },
-    ratingScale: {
-        fontSize: theme.fontSize.lg,
-        color: theme.colors.textTertiary,
-        marginLeft: 4,
-    },
-    ratingBar: {
-        height: 6,
-        backgroundColor: theme.colors.surfaceLight,
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    ratingFill: {
-        height: '100%',
-        backgroundColor: theme.colors.primary,
-    },
+    // Removed old rating styles
     input: {
         backgroundColor: theme.colors.surfaceLight,
         borderRadius: theme.borderRadius.lg,

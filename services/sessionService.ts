@@ -64,14 +64,9 @@ export const sessionService = {
         }
 
         // If no rows were deleted (e.g. session not found or RLS policy blocked it), throw an error
-        // Note: If RLS blocks it, count might be null or 0.
-        if (count === 0 && data?.length === 0) {
+        if (data?.length === 0) {
             console.warn('Delete operation returned 0 rows. RLS might be blocking it or session does not exist.');
-            // We might want to throw here to alert the UI, or just silently succeed if it's already gone.
-            // For this bug, we want to know if it failed.
-            // But if it's already gone, "succeeding" is fine.
-            // However, if it exists but RLS blocks it, we want a failure.
-            // Since we can't easily distinguish without checking if it exists first, we'll log it.
+            throw new Error('Failed to delete session. Please check your internet connection or try again.');
         }
     },
 
