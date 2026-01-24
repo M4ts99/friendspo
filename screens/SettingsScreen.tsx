@@ -140,28 +140,43 @@ export default function SettingsScreen({
     }, []);
 
     const handleUpdateAccount = async () => {
-        if (updating) return; // Prevent multiple calls
+        console.log('🔧 [SETTINGS] handleUpdateAccount called');
+
+        if (updating) {
+            console.log('⚠️ [SETTINGS] Already updating, ignoring call');
+            return; // Prevent multiple calls
+        }
+
+        console.log('🔧 [SETTINGS] Email:', email);
+        console.log('🔧 [SETTINGS] Password length:', password?.length);
 
         if (!email || !email.includes('@')) {
+            console.log('❌ [SETTINGS] Invalid email');
             Alert.alert('Error', 'A valid email address is required');
             return;
         }
         if (!password) {
+            console.log('❌ [SETTINGS] No password');
             Alert.alert('Error', 'Password is required');
             return;
         }
         if (password !== confirmPassword) {
+            console.log('❌ [SETTINGS] Passwords do not match');
             Alert.alert('Error', 'Passwords do not match');
             return;
         }
         if (password.length < 6) {
+            console.log('❌ [SETTINGS] Password too short');
             Alert.alert('Error', 'Password must be at least 6 characters');
             return;
         }
 
+        console.log('🔧 [SETTINGS] Starting upgrade...');
         setUpdating(true);
+
         try {
             await authService.upgradeUser(email.trim(), password);
+            console.log('✅ [SETTINGS] Upgrade successful!');
             Alert.alert('Success', 'Account secured successfully!');
             setAccountModalVisible(false);
             setEmail('');
@@ -169,9 +184,10 @@ export default function SettingsScreen({
             setConfirmPassword('');
             await loadAccountInfo();
         } catch (error: any) {
-            console.error('Update account error:', error);
+            console.error('❌ [SETTINGS] Update account error:', error);
             Alert.alert('Error', error.message || 'Failed to update account');
         } finally {
+            console.log('🔧 [SETTINGS] Setting updating to false');
             setUpdating(false);
         }
     };

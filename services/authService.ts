@@ -233,14 +233,23 @@ export const authService = {
     // Upgrade anonymous user to registered user (email is mandatory)
     async upgradeUser(email: string, password: string): Promise<void> {
         try {
+            console.log('🔄 [UPGRADE] Starting upgrade process...');
+            console.log('🔄 [UPGRADE] Email:', email);
+
             if (!email || !email.includes('@')) {
+                console.error('❌ [UPGRADE] Invalid email format');
                 throw new Error('A valid email address is required');
             }
 
             const currentUser = await this.getCurrentUser();
-            if (!currentUser) throw new Error('No user to upgrade');
+            console.log('🔄 [UPGRADE] Current user:', currentUser?.id, currentUser?.nickname);
 
-            console.log('Upgrading user with email:', email);
+            if (!currentUser) {
+                console.error('❌ [UPGRADE] No current user found');
+                throw new Error('No user to upgrade');
+            }
+
+            console.log('🔄 [UPGRADE] Calling Supabase signUp...');
 
             // Sign up with Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -249,17 +258,23 @@ export const authService = {
             });
 
             if (authError) {
+                console.error('❌ [UPGRADE] Supabase signUp error:', authError);
                 if (authError.message.includes('already registered')) {
                     throw new Error('This email is already in use');
                 }
                 throw authError;
             }
-            if (!authData.user) throw new Error('Failed to create auth user');
+
+            if (!authData.user) {
+                console.error('❌ [UPGRADE] No user returned from signUp');
+                throw new Error('Failed to create auth user');
+            }
 
             const newUserId = authData.user.id;
             const oldUserId = currentUser.id;
 
-            console.log(`Migrating data from ${oldUserId} to ${newUserId}`);
+            console.log('✅ [UPGRADE] Supabase user created:', newUserId);
+            console.log('🔄 [UPGRADE] Migrating data from', oldUserId, 'to', newUserId);
 
             // Migrate Data via RPC
             const { error: rpcError } = await supabase.rpc('migrate_user_data', {
@@ -268,9 +283,12 @@ export const authService = {
             });
 
             if (rpcError) {
-                console.error('Migration RPC failed:', rpcError);
+                console.error('❌ [UPGRADE] Migration RPC failed:', rpcError);
                 throw rpcError;
             }
+
+            console.log('✅ [UPGRADE] Data migration successful');
+            console.log('🔄 [UPGRADE] Updating email in users table...');
 
             // Update email in users table (the RPC doesn't update email)
             const { error: emailUpdateError } = await supabase
@@ -279,8 +297,12 @@ export const authService = {
                 .eq('id', newUserId);
 
             if (emailUpdateError) {
-                console.error('Failed to update email in users table:', emailUpdateError);
+                console.error('⚠️ [UPGRADE] Failed to update email in users table:', emailUpdateError);
+            } else {
+                console.log('✅ [UPGRADE] Email updated in users table');
             }
+
+            console.log('🔄 [UPGRADE] Signing in with new credentials...');
 
             // Sign in with the new credentials to establish session
             const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -289,18 +311,21 @@ export const authService = {
             });
 
             if (signInError) {
-                console.error('Failed to sign in after upgrade:', signInError);
+                console.error('❌ [UPGRADE] Failed to sign in after upgrade:', signInError);
                 throw new Error('Account created but login failed. Please try logging in manually.');
             }
+
+            console.log('✅ [UPGRADE] Sign in successful');
+            console.log('🔄 [UPGRADE] Updating local storage...');
 
             // Update Local Storage with new ID
             const AsyncStorage = require('@react-native-async-storage/async-storage').default;
             await AsyncStorage.setItem('userId', newUserId);
 
-            console.log('Upgrade successful');
+            console.log('✅ [UPGRADE] Upgrade complete! New user ID:', newUserId);
 
         } catch (error) {
-            console.error('Upgrade user error:', error);
+            console.error('❌ [UPGRADE] Upgrade user error:', error);
             throw error;
         }
     },
