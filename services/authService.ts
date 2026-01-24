@@ -24,17 +24,24 @@ export const authService = {
 
             // Create user with Supabase Auth if email and password provided
             if (email && password) {
+                console.log('📝 [SIGNUP] Starting sign up with email:', email);
+                console.log('📝 [SIGNUP] Nickname:', nickname);
+
                 const { data: authData, error: authError } = await supabase.auth.signUp({
                     email,
                     password,
                 });
 
                 if (authError) {
+                    console.error('❌ [SIGNUP] Supabase Auth error:', authError);
                     if (authError.message.includes("already registered")) {
                         throw new Error('USER_EXISTS');
                     }
                     throw authError;
                 }
+
+                console.log('✅ [SIGNUP] Supabase Auth user created:', authData.user!.id);
+                console.log('📝 [SIGNUP] Creating user profile in database...');
 
                 // Create user profile
                 const { error: profileError } = await supabase
@@ -49,9 +56,14 @@ export const authService = {
                     ]);
 
                 if (profileError) {
-                    console.error('ERRORE DATABASE PROFILO:', profileError.message);
+                    console.error('❌ [SIGNUP] Database profile error:', profileError);
+                    console.error('❌ [SIGNUP] Error code:', profileError.code);
+                    console.error('❌ [SIGNUP] Error message:', profileError.message);
+                    console.error('❌ [SIGNUP] Error details:', profileError.details);
                     throw profileError;
                 }
+
+                console.log('✅ [SIGNUP] User profile created successfully!');
                 return authData.user;
             } else {
                 // Anonymous user - generate a UUID
