@@ -121,10 +121,25 @@ export default function App() {
     try {
       console.log('App: Checking auth...');
 
-      // check if session exists
+      // check if session exists with timeout
       console.log('🔍 [APP] Calling supabase.auth.getSession()...');
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('🔍 [APP] getSession() completed');
+
+      let session = null;
+      try {
+        // Add timeout to prevent infinite hanging
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('getSession timeout')), 5000)
+        );
+
+        const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
+        session = result.data?.session;
+        console.log('🔍 [APP] getSession() completed');
+      } catch (error) {
+        console.warn('⚠️ [APP] getSession() failed or timed out:', error);
+        // Continue anyway - getCurrentUser will handle auth check
+      }
+
       console.log('App: Does technical session exist?', !!session);
 
       console.log('🔍 [APP] Calling authService.getCurrentUser()...');
