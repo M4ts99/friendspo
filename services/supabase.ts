@@ -25,6 +25,7 @@ export interface User {
     nickname: string;
     email?: string;
     is_sharing_enabled: boolean;
+    last_nickname_change?: string;
     created_at: string;
 }
 

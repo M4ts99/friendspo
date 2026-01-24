@@ -47,12 +47,32 @@ export default function SettingsScreen({
     });
     const [hasPassword, setHasPassword] = useState(true);
 
+    // Account Info State
+    const [accountInfo, setAccountInfo] = useState<{
+        email: string | null;
+        hasPassword: boolean;
+        nickname: string;
+        canChangeNickname: boolean;
+        nextNicknameChange: Date | null;
+    } | null>(null);
+
     // Account Modal State
     const [accountModalVisible, setAccountModalVisible] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [updating, setUpdating] = useState(false);
+
+    // Change Password Modal State
+    const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
+    const [oldPassword, setOldPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+    // Change Nickname Modal State
+    const [changeNicknameModalVisible, setChangeNicknameModalVisible] = useState(false);
+    const [newNickname, setNewNickname] = useState('');
+    const [nicknamePassword, setNicknamePassword] = useState('');
 
     const hideModal = () => {
         setModalConfig(prev => ({ ...prev, visible: false }));
@@ -105,16 +125,25 @@ export default function SettingsScreen({
         }
     };
 
-    const checkPasswordStatus = async () => {
-        const status = await authService.hasPassword();
-        setHasPassword(status);
+    const loadAccountInfo = async () => {
+        try {
+            const info = await authService.getAccountInfo();
+            setAccountInfo(info);
+            setHasPassword(info.hasPassword);
+        } catch (error) {
+            console.error('Error loading account info:', error);
+        }
     };
 
     useEffect(() => {
-        checkPasswordStatus();
+        loadAccountInfo();
     }, []);
 
     const handleUpdateAccount = async () => {
+        if (!email || !email.includes('@')) {
+            Alert.alert('Error', 'A valid email address is required');
+            return;
+        }
         if (!password) {
             Alert.alert('Error', 'Password is required');
             return;
@@ -130,12 +159,69 @@ export default function SettingsScreen({
 
         setUpdating(true);
         try {
-            await authService.upgradeUser(password, email.trim() || undefined);
-            Alert.alert('Success', 'Account updated successfully!');
+            await authService.upgradeUser(email.trim(), password);
+            Alert.alert('Success', 'Account secured successfully!');
             setAccountModalVisible(false);
-            setHasPassword(true);
+            setEmail('');
+            setPassword('');
+            setConfirmPassword('');
+            loadAccountInfo();
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to update account');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleChangePassword = async () => {
+        if (!oldPassword) {
+            Alert.alert('Error', 'Current password is required');
+            return;
+        }
+        if (!newPassword || newPassword.length < 6) {
+            Alert.alert('Error', 'New password must be at least 6 characters');
+            return;
+        }
+        if (newPassword !== confirmNewPassword) {
+            Alert.alert('Error', 'New passwords do not match');
+            return;
+        }
+
+        setUpdating(true);
+        try {
+            await authService.changePassword(oldPassword, newPassword);
+            Alert.alert('Success', 'Password changed successfully!');
+            setChangePasswordModalVisible(false);
+            setOldPassword('');
+            setNewPassword('');
+            setConfirmNewPassword('');
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to change password');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleChangeNickname = async () => {
+        if (!newNickname || newNickname.length < 3) {
+            Alert.alert('Error', 'Nickname must be at least 3 characters');
+            return;
+        }
+        if (hasPassword && !nicknamePassword) {
+            Alert.alert('Error', 'Password is required to change nickname');
+            return;
+        }
+
+        setUpdating(true);
+        try {
+            await authService.changeNickname(newNickname, nicknamePassword);
+            Alert.alert('Success', 'Nickname changed successfully!');
+            setChangeNicknameModalVisible(false);
+            setNewNickname('');
+            setNicknamePassword('');
+            loadAccountInfo();
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to change nickname');
         } finally {
             setUpdating(false);
         }
@@ -371,22 +457,64 @@ export default function SettingsScreen({
                 </View>
             </View>
 
-            {/* Account Section (Conditional) */}
-            {!hasPassword && (
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Account</Text>
+            {/* Account Section */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Account</Text>
+
+                {/* Email Display */}
+                <View style={styles.accountInfoCard}>
+                    <View style={styles.accountInfoRow}>
+                        <Mail size={20} color={theme.colors.textSecondary} />
+                        <View style={styles.accountInfoContent}>
+                            <Text style={styles.accountInfoLabel}>Email</Text>
+                            <Text style={styles.accountInfoValue}>
+                                {accountInfo?.email || 'Not set'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.accountInfoRow}>
+                        <Key size={20} color={theme.colors.textSecondary} />
+                        <View style={styles.accountInfoContent}>
+                            <Text style={styles.accountInfoLabel}>Password</Text>
+                            <Text style={styles.accountInfoValue}>
+                                {hasPassword ? '••••••••' : 'Not set'}
+                            </Text>
+                        </View>
+                        {hasPassword && (
+                            <TouchableOpacity onPress={() => setChangePasswordModalVisible(true)}>
+                                <Text style={styles.changeLink}>Change</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    <View style={styles.accountInfoRow}>
+                        <UserIcon size={20} color={theme.colors.textSecondary} />
+                        <View style={styles.accountInfoContent}>
+                            <Text style={styles.accountInfoLabel}>Nickname</Text>
+                            <Text style={styles.accountInfoValue}>{accountInfo?.nickname || nickname}</Text>
+                        </View>
+                        {accountInfo?.canChangeNickname ? (
+                            <TouchableOpacity onPress={() => setChangeNicknameModalVisible(true)}>
+                                <Text style={styles.changeLink}>Change</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <Text style={styles.cooldownText}>Wait 7 days</Text>
+                        )}
+                    </View>
+                </View>
+
+                {/* Secure Account Button - only for guest users */}
+                {!hasPassword && (
                     <TouchableOpacity
-                        style={styles.menuItem}
+                        style={styles.secureButton}
                         onPress={() => setAccountModalVisible(true)}
                     >
-                        <View style={styles.menuItemLeft}>
-                            <Text style={styles.menuItemText}>Account Information</Text>
-                            <Text style={styles.menuItemSubtext}>Add email and password to secure account</Text>
-                        </View>
-                        <Lock size={20} color={theme.colors.primary} />
+                        <Lock size={20} color={theme.colors.text} />
+                        <Text style={styles.secureButtonText}>Secure Your Account</Text>
                     </TouchableOpacity>
-                </View>
-            )}
+                )}
+            </View>
 
             {/* Danger Zone */}
             <View style={styles.section}>
@@ -442,11 +570,11 @@ export default function SettingsScreen({
 
                         <View style={styles.modalContent}>
                             <Text style={styles.modalDescription}>
-                                Add a password to ensure you can log back in later. Email is optional but recommended for recovery.
+                                Add email and password to secure your account. Email is required for password recovery.
                             </Text>
 
                             <View style={styles.inputContainer}>
-                                <Text style={styles.inputLabel}>Email (Optional)</Text>
+                                <Text style={styles.inputLabel}>Email *</Text>
                                 <View style={styles.inputWrapper}>
                                     <Mail size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
                                     <TextInput
@@ -499,7 +627,154 @@ export default function SettingsScreen({
                                 {updating ? (
                                     <ActivityIndicator color={theme.colors.text} />
                                 ) : (
-                                    <Text style={styles.saveButtonText}>Save Account Info</Text>
+                                    <Text style={styles.saveButtonText}>Secure Account</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Change Password Modal */}
+            <Modal
+                visible={changePasswordModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setChangePasswordModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Change Password</Text>
+                            <TouchableOpacity onPress={() => setChangePasswordModalVisible(false)}>
+                                <Text style={styles.closeText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.modalContent}>
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Current Password *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Key size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={oldPassword}
+                                        onChangeText={setOldPassword}
+                                        placeholder="Enter current password"
+                                        placeholderTextColor={theme.colors.textTertiary}
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>New Password *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Key size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={newPassword}
+                                        onChangeText={setNewPassword}
+                                        placeholder="Min. 6 characters"
+                                        placeholderTextColor={theme.colors.textTertiary}
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Confirm New Password *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Key size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={confirmNewPassword}
+                                        onChangeText={setConfirmNewPassword}
+                                        placeholder="Retype new password"
+                                        placeholderTextColor={theme.colors.textTertiary}
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.saveButton, updating && styles.disabledButton]}
+                                onPress={handleChangePassword}
+                                disabled={updating}
+                            >
+                                {updating ? (
+                                    <ActivityIndicator color={theme.colors.text} />
+                                ) : (
+                                    <Text style={styles.saveButtonText}>Change Password</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Change Nickname Modal */}
+            <Modal
+                visible={changeNicknameModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setChangeNicknameModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Change Nickname</Text>
+                            <TouchableOpacity onPress={() => setChangeNicknameModalVisible(false)}>
+                                <Text style={styles.closeText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalDescription}>
+                                You can only change your nickname once per week.
+                            </Text>
+
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>New Nickname *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <UserIcon size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        value={newNickname}
+                                        onChangeText={setNewNickname}
+                                        placeholder="Min. 3 characters"
+                                        placeholderTextColor={theme.colors.textTertiary}
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+                            </View>
+
+                            {hasPassword && (
+                                <View style={styles.inputContainer}>
+                                    <Text style={styles.inputLabel}>Current Password *</Text>
+                                    <View style={styles.inputWrapper}>
+                                        <Key size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            value={nicknamePassword}
+                                            onChangeText={setNicknamePassword}
+                                            placeholder="Verify with password"
+                                            placeholderTextColor={theme.colors.textTertiary}
+                                            secureTextEntry
+                                        />
+                                    </View>
+                                </View>
+                            )}
+
+                            <TouchableOpacity
+                                style={[styles.saveButton, updating && styles.disabledButton]}
+                                onPress={handleChangeNickname}
+                                disabled={updating}
+                            >
+                                {updating ? (
+                                    <ActivityIndicator color={theme.colors.text} />
+                                ) : (
+                                    <Text style={styles.saveButtonText}>Change Nickname</Text>
                                 )}
                             </TouchableOpacity>
                         </View>
@@ -776,6 +1051,56 @@ const styles = StyleSheet.create({
         opacity: 0.7,
     },
     saveButtonText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.md,
+        fontWeight: theme.fontWeight.bold,
+    },
+    accountInfoCard: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.md,
+        ...theme.shadows.sm,
+    },
+    accountInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+    },
+    accountInfoContent: {
+        flex: 1,
+        marginLeft: theme.spacing.md,
+    },
+    accountInfoLabel: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+    },
+    accountInfoValue: {
+        fontSize: theme.fontSize.md,
+        color: theme.colors.text,
+        fontWeight: theme.fontWeight.medium,
+    },
+    changeLink: {
+        color: theme.colors.primary,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    cooldownText: {
+        color: theme.colors.textTertiary,
+        fontSize: theme.fontSize.xs,
+    },
+    secureButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.primary,
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.md,
+        marginTop: theme.spacing.md,
+        gap: theme.spacing.sm,
+    },
+    secureButtonText: {
         color: theme.colors.text,
         fontSize: theme.fontSize.md,
         fontWeight: theme.fontWeight.bold,

@@ -35,7 +35,7 @@ export const authService = {
                     }
                     throw authError;
                 }
-                
+
                 // Create user profile
                 const { error: profileError } = await supabase
                     .from('users')
@@ -85,37 +85,38 @@ export const authService = {
         }
     },
 
-    // Sign in existing user (requires email/password)
+    // Sign in existing user (supports email or nickname)
     async signIn(identifier: string, password: string) {
         try {
-            // Try email login first
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: identifier,
-                password,
-            });
+            let email = identifier;
 
-            if (error) {
-                console.error("SUPABASE ERROR:", error.message); 
-                throw error;
-            }
-
-            if (error) {
-                // Try nickname lookup
+            // If identifier doesn't look like an email, try nickname lookup
+            if (!identifier.includes('@')) {
                 const { data: userData } = await supabase
                     .from('users')
                     .select('email')
                     .eq('nickname', identifier)
                     .maybeSingle();
 
-                if (userData?.email) {
-                    return await supabase.auth.signInWithPassword({
-                        email: userData.email,
-                        password,
-                    });
+                if (!userData?.email) {
+                    throw new Error('User not found or has no password set');
                 }
+                email = userData.email;
+            }
 
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (error) {
+                console.error("SUPABASE ERROR:", error.message);
+                if (error.message.includes('Invalid login')) {
+                    throw new Error('Invalid email/nickname or password');
+                }
                 throw error;
             }
+
             if (data.session) {
                 await supabase.auth.setSession(data.session);
             }
@@ -145,7 +146,7 @@ export const authService = {
     async getCurrentUser() {
         try {
             // First try to get authenticated user
-            const { data: { user }, error : authError } = await supabase.auth.getUser();
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
 
             console.log('Get current user - supabase auth user:', user);
             if (authError) {
@@ -229,26 +230,30 @@ export const authService = {
         await AsyncStorage.removeItem('userId');
         await AsyncStorage.removeItem('nickname');
     },
-    // Upgrade anonymous user to registered user
-    async upgradeUser(password: string, email?: string): Promise<void> {
+    // Upgrade anonymous user to registered user (email is mandatory)
+    async upgradeUser(email: string, password: string): Promise<void> {
         try {
+            if (!email || !email.includes('@')) {
+                throw new Error('A valid email address is required');
+            }
+
             const currentUser = await this.getCurrentUser();
             if (!currentUser) throw new Error('No user to upgrade');
 
-            // 1. Prepare credentials
-            // If no email provided, generate a placeholder that satisfies Supabase
-            // Format: [nickname]_[random]
-            const effectiveEmail = email || `${currentUser.nickname}_${crypto.randomUUID().split('-')[0]}@friendspo.placeholder`;
+            console.log('Upgrading user with email:', email);
 
-            console.log('Upgrading user with email:', effectiveEmail);
-
-            // 2. Sign up with Supabase Auth
+            // Sign up with Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signUp({
-                email: effectiveEmail,
+                email: email,
                 password: password,
             });
 
-            if (authError) throw authError;
+            if (authError) {
+                if (authError.message.includes('already registered')) {
+                    throw new Error('This email is already in use');
+                }
+                throw authError;
+            }
             if (!authData.user) throw new Error('Failed to create auth user');
 
             const newUserId = authData.user.id;
@@ -256,25 +261,20 @@ export const authService = {
 
             console.log(`Migrating data from ${oldUserId} to ${newUserId}`);
 
-            // 3. Migrate Data via RPC
+            // Migrate Data via RPC
             const { error: rpcError } = await supabase.rpc('migrate_user_data', {
                 old_user_id: oldUserId,
                 new_user_id: newUserId
             });
 
             if (rpcError) {
-                // If migration fails, we should probably try to clean up the new auth user?
-                // But generally RPC is transactional.
                 console.error('Migration RPC failed:', rpcError);
                 throw rpcError;
             }
 
-            // 4. Update Local Storage with new ID
+            // Update Local Storage with new ID
             const AsyncStorage = require('@react-native-async-storage/async-storage').default;
             await AsyncStorage.setItem('userId', newUserId);
-
-            // 5. Ensure we are signed in (SignUp usually signs in, but let's be safe)
-            // If auto-confirm is not on, this might be tricky. Assuming auto-confirm for now.
 
             console.log('Upgrade successful');
 
@@ -289,15 +289,164 @@ export const authService = {
         // Genera l'URL corretto automaticamente:
         // - Su Web diventerà: http://localhost:8081
         // - Su Mobile (Expo Go) diventerà: exp://10.7.14.52:8081
-        const redirectUrl = Linking.createURL('/'); 
-        
+        const redirectUrl = Linking.createURL('/');
+
         console.log('Reset Password Redirect URL:', redirectUrl);
 
         const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: redirectUrl, 
+            redirectTo: redirectUrl,
         });
-        
+
         if (error) throw error;
         return data;
-    }
+    },
+
+    // Get account information for display
+    async getAccountInfo(): Promise<{ email: string | null; hasPassword: boolean; nickname: string; canChangeNickname: boolean; nextNicknameChange: Date | null }> {
+        const user = await this.getCurrentUser();
+        if (!user) throw new Error('No user found');
+
+        const hasPassword = !!(user.email);
+
+        // Check nickname change cooldown (7 days)
+        let canChangeNickname = true;
+        let nextNicknameChange: Date | null = null;
+
+        if (user.last_nickname_change) {
+            const lastChange = new Date(user.last_nickname_change);
+            const cooldownEnd = new Date(lastChange.getTime() + 7 * 24 * 60 * 60 * 1000);
+            if (new Date() < cooldownEnd) {
+                canChangeNickname = false;
+                nextNicknameChange = cooldownEnd;
+            }
+        }
+
+        // Only show real emails, not placeholder emails
+        const displayEmail = user.email && !user.email.includes('@friendspo.placeholder')
+            ? user.email
+            : null;
+
+        return {
+            email: displayEmail,
+            hasPassword,
+            nickname: user.nickname,
+            canChangeNickname,
+            nextNicknameChange,
+        };
+    },
+
+    // Change password (requires old password verification)
+    async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+        const user = await this.getCurrentUser();
+        if (!user || !user.email) throw new Error('No authenticated user found');
+
+        // Verify old password by attempting to sign in
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: user.email,
+            password: oldPassword,
+        });
+
+        if (signInError) throw new Error('Current password is incorrect');
+
+        // Update to new password
+        const { error: updateError } = await supabase.auth.updateUser({
+            password: newPassword,
+        });
+
+        if (updateError) throw updateError;
+    },
+
+    // Change nickname (requires password verification and 7-day cooldown)
+    async changeNickname(newNickname: string, currentPassword: string): Promise<void> {
+        const user = await this.getCurrentUser();
+        if (!user) throw new Error('No user found');
+
+        // Check cooldown
+        if (user.last_nickname_change) {
+            const lastChange = new Date(user.last_nickname_change);
+            const cooldownEnd = new Date(lastChange.getTime() + 7 * 24 * 60 * 60 * 1000);
+            if (new Date() < cooldownEnd) {
+                const daysLeft = Math.ceil((cooldownEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+                throw new Error(`You can change your nickname again in ${daysLeft} days`);
+            }
+        }
+
+        // Check if user has password (need to verify)
+        if (user.email) {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: user.email,
+                password: currentPassword,
+            });
+            if (signInError) throw new Error('Password is incorrect');
+        }
+
+        // Check if new nickname is available
+        const isAvailable = await this.checkNicknameAvailability(newNickname);
+        if (!isAvailable) throw new Error('Nickname is already taken');
+
+        // Update nickname
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({
+                nickname: newNickname,
+                last_nickname_change: new Date().toISOString()
+            })
+            .eq('id', user.id);
+
+        if (updateError) throw updateError;
+
+        // Update local storage
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        await AsyncStorage.setItem('nickname', newNickname);
+    },
+
+    // Add email to existing account (for password reset capability)
+    async addEmail(email: string, password: string): Promise<void> {
+        const user = await this.getCurrentUser();
+        if (!user) throw new Error('No user found');
+
+        // If user doesn't have Supabase Auth yet, we need to upgrade them
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+
+        if (!authUser) {
+            // Create new Supabase Auth user
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email,
+                password,
+            });
+
+            if (authError) {
+                if (authError.message.includes('already registered')) {
+                    throw new Error('This email is already in use');
+                }
+                throw authError;
+            }
+
+            if (!authData.user) throw new Error('Failed to create auth user');
+
+            // Migrate data
+            const { error: rpcError } = await supabase.rpc('migrate_user_data', {
+                old_user_id: user.id,
+                new_user_id: authData.user.id,
+            });
+
+            if (rpcError) throw rpcError;
+
+            // Update local storage
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            await AsyncStorage.setItem('userId', authData.user.id);
+        } else {
+            // User already has Supabase Auth, just update email
+            const { error: updateError } = await supabase.auth.updateUser({ email });
+            if (updateError) throw updateError;
+
+            // Also update in users table
+            const { error: dbError } = await supabase
+                .from('users')
+                .update({ email })
+                .eq('id', user.id);
+            if (dbError) throw dbError;
+        }
+    },
 };
+
