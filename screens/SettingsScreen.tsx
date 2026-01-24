@@ -478,7 +478,23 @@ export default function SettingsScreen({
 
             {/* Account Section */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Account</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+                    <Text style={styles.sectionTitle}>Account</Text>
+                    {!hasPassword && (
+                        <View style={styles.guestBadge}>
+                            <Text style={styles.guestBadgeText}>👤 Guest</Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* Guest Warning */}
+                {!hasPassword && (
+                    <View style={styles.warningBox}>
+                        <Text style={styles.warningText}>
+                            ⚠️ Your data will be lost when you log out. Create an account to save your progress!
+                        </Text>
+                    </View>
+                )}
 
                 {/* Email Display */}
                 <View style={styles.accountInfoCard}>
@@ -523,14 +539,14 @@ export default function SettingsScreen({
                     </View>
                 </View>
 
-                {/* Secure Account Button - only for guest users */}
+                {/* Create Account Button - only for guest users */}
                 {!hasPassword && (
                     <TouchableOpacity
                         style={styles.secureButton}
                         onPress={() => setAccountModalVisible(true)}
                     >
                         <Lock size={20} color={theme.colors.text} />
-                        <Text style={styles.secureButtonText}>Secure Your Account</Text>
+                        <Text style={styles.secureButtonText}>Create Account</Text>
                     </TouchableOpacity>
                 )}
             </View>
@@ -1122,6 +1138,19 @@ const styles = StyleSheet.create({
     secureButtonText: {
         color: theme.colors.text,
         fontSize: theme.fontSize.md,
+        fontWeight: theme.fontWeight.bold,
+    },
+    guestBadge: {
+        backgroundColor: 'rgba(255,165,0,0.2)',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs,
+        borderRadius: theme.borderRadius.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255,165,0,0.5)',
+    },
+    guestBadgeText: {
+        color: theme.colors.warning || '#FFA500',
+        fontSize: theme.fontSize.xs,
         fontWeight: theme.fontWeight.bold,
     },
 });

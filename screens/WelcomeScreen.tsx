@@ -477,65 +477,63 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
 
                                     {step === 'optional' && (
                                         <>
-                                            <Text style={styles.stepTitle}>Secure Your Account</Text>
+                                            <Text style={styles.stepTitle}>Create Your Account</Text>
                                             <Text style={styles.stepSubtitle}>
-                                                Create a password to save your progress
+                                                Email and password are required to save your progress
                                             </Text>
 
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="Email *"
+                                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                    value={email}
+                                                    onChangeText={setEmail}
+                                                    keyboardType="email-address"
+                                                    autoCapitalize="none"
+                                                />
+                                            </View>
+
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="Password *"
+                                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                    value={password}
+                                                    onChangeText={setPassword}
+                                                    secureTextEntry
+                                                    autoCapitalize="none"
+                                                />
+                                            </View>
+
                                             <TouchableOpacity
-                                                style={[styles.secureExpandHeader, isSecureExpanded && styles.secureExpandHeaderActive]}
-                                                onPress={() => setIsSecureExpanded(!isSecureExpanded)}
+                                                style={[
+                                                    styles.button,
+                                                    (!email || !password || password.length < 6) && styles.buttonDisabled
+                                                ]}
+                                                onPress={() => setStep('privacy')}
+                                                disabled={!email || !password || password.length < 6}
                                             >
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                    <Text style={{ fontSize: 24 }}>🔐</Text>
-                                                    <View>
-                                                        <Text style={styles.secureOptionTitle}>Add Password & Email</Text>
-                                                        <Text style={styles.secureOptionSubtitle}>Recommended for recovery</Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={styles.arrowIcon}>{isSecureExpanded ? '▲' : '▼'}</Text>
+                                                <Text style={styles.buttonText}>Next →</Text>
                                             </TouchableOpacity>
 
-                                            {isSecureExpanded && (
-                                                <View style={styles.secureContent}>
-                                                    <View style={styles.warningBox}>
-                                                        <Text style={styles.warningText}>
-                                                            ⚠️ Without a password, logging out will delete your account permanently!
-                                                        </Text>
-                                                    </View>
-
-                                                    <View style={styles.inputContainer}>
-                                                        <TextInput
-                                                            style={styles.input}
-                                                            placeholder="Email (optional)"
-                                                            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                                            value={email}
-                                                            onChangeText={setEmail}
-                                                            keyboardType="email-address"
-                                                            autoCapitalize="none"
-                                                        />
-                                                    </View>
-
-                                                    <View style={styles.inputContainer}>
-                                                        <TextInput
-                                                            style={styles.input}
-                                                            placeholder="Password"
-                                                            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                                            value={password}
-                                                            onChangeText={setPassword}
-                                                            secureTextEntry
-                                                            autoCapitalize="none"
-                                                        />
-                                                    </View>
-                                                </View>
-                                            )}
+                                            <View style={styles.guestDivider}>
+                                                <View style={styles.dividerLine} />
+                                                <Text style={styles.dividerText}>OR</Text>
+                                                <View style={styles.dividerLine} />
+                                            </View>
 
                                             <TouchableOpacity
-                                                style={styles.button}
-                                                onPress={() => setStep('privacy')}
+                                                style={styles.guestButton}
+                                                onPress={() => {
+                                                    setEmail('');
+                                                    setPassword('');
+                                                    setStep('privacy');
+                                                }}
                                             >
-                                                <Text style={styles.buttonText}>
-                                                    {isSecureExpanded && password ? "Next →" : "Continue without Password"}
+                                                <Text style={styles.guestButtonText}>👤 Continue as Guest</Text>
+                                                <Text style={styles.guestWarning}>
+                                                    ⚠️ Your data will be lost when you log out
                                                 </Text>
                                             </TouchableOpacity>
                                         </>
@@ -954,5 +952,42 @@ const styles = StyleSheet.create({
     modalCancelText: {
         color: theme.colors.textSecondary,
         fontSize: theme.fontSize.md,
+    },
+    // Guest Mode Styles
+    guestDivider: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: theme.spacing.lg,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    dividerText: {
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.sm,
+        marginHorizontal: theme.spacing.md,
+        fontWeight: 'bold',
+    },
+    guestButton: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.md,
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.2)',
+        borderStyle: 'dashed',
+    },
+    guestButtonText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.md,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: theme.spacing.xs,
+    },
+    guestWarning: {
+        color: theme.colors.warning || '#FFA500',
+        fontSize: theme.fontSize.sm,
+        textAlign: 'center',
     },
 });
