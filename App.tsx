@@ -127,45 +127,14 @@ export default function App() {
 
       const currentUser = await authService.getCurrentUser();
 
-      // ORPHANED SESSION DETECTION
-      // If we have a Supabase session but no user in the database, it might be:
-      // 1. An orphaned session from old placeholder emails (needs cleanup)
-      // 2. A fresh sign up that hasn't written to DB yet (needs time)
-      if (session && !currentUser) {
-        console.warn('⚠️ [APP] Session exists but no user record found.');
-        console.log('🔧 [APP] Waiting for fresh sign ups to complete (checking 5 times over 10 seconds)...');
-
-        // Try 5 times with 2 second delays (total 10 seconds)
-        // This gives the sign up process plenty of time to complete
-        let currentUserAfterDelay = null;
-        for (let attempt = 1; attempt <= 5; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          console.log(`🔧 [APP] Attempt ${attempt}/5: Checking for user...`);
-          currentUserAfterDelay = await authService.getCurrentUser();
-
-          if (currentUserAfterDelay) {
-            console.log(`✅ [APP] Fresh sign up detected on attempt ${attempt}, user created:`, currentUserAfterDelay.id);
-            setUser(currentUserAfterDelay);
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        // Still no user after 5 attempts (10 seconds) - this is truly an orphaned session
-        console.warn('⚠️ [APP] Confirmed orphaned session after 5 attempts! Cleaning up...');
-
-        try {
-          await supabase.auth.signOut();
-          await AsyncStorage.clear();
-          console.log('✅ [APP] Orphaned session cleaned up successfully');
-        } catch (cleanupError) {
-          console.error('❌ [APP] Failed to clean up orphaned session:', cleanupError);
-        }
-
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
+      // NOTE: Orphaned session cleanup has been removed from here
+      // It was causing race conditions with the sign up process
+      // The sign up process creates the Supabase Auth user first (triggers SIGNED_IN event)
+      // Then creates the users table entry (takes time)
+      // The cleanup would delete the session before the users table entry was created
+      // 
+      // Orphaned sessions from old placeholder emails are rare and will be cleaned up
+      // when users try to log in (they'll get an error and can create a new account)
 
       if (currentUser) {
         console.log('App: User loaded with success:', currentUser.id);
