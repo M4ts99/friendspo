@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import * as Linking from 'expo-linking';
 
 export const authService = {
     // Check if nickname is available
@@ -28,8 +29,13 @@ export const authService = {
                     password,
                 });
 
-                if (authError) throw authError;
-
+                if (authError) {
+                    if (authError.message.includes("already registered")) {
+                        throw new Error('USER_EXISTS');
+                    }
+                    throw authError;
+                }
+                
                 // Create user profile
                 const { error: profileError } = await supabase
                     .from('users')
@@ -42,8 +48,10 @@ export const authService = {
                         },
                     ]);
 
-                if (profileError) throw profileError;
-
+                if (profileError) {
+                    console.error('ERRORE DATABASE PROFILO:', profileError.message);
+                    throw profileError;
+                }
                 return authData.user;
             } else {
                 // Anonymous user - generate a UUID
@@ -275,4 +283,21 @@ export const authService = {
             throw error;
         }
     },
+
+    // MODIFICA QUESTA FUNZIONE
+    async resetPassword(email: string) {
+        // Genera l'URL corretto automaticamente:
+        // - Su Web diventerà: http://localhost:8081
+        // - Su Mobile (Expo Go) diventerà: exp://10.7.14.52:8081
+        const redirectUrl = Linking.createURL('/'); 
+        
+        console.log('Reset Password Redirect URL:', redirectUrl);
+
+        const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: redirectUrl, 
+        });
+        
+        if (error) throw error;
+        return data;
+    }
 };

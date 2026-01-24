@@ -25,21 +25,92 @@ enableScreens(false);
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [initialStep, setInitialStep] = useState<'nickname' | 'optional' | 'privacy' | 'reset_password'>('nickname');
 
-  useEffect(() => {
-    const testStorage = async () => {
+useEffect(() => {
+    const initializeApp = async () => {
+      console.log('1. Inizializzazione App...');
+      
+      // Test Storage (opzionale, come da tuo codice)
       try {
         await AsyncStorage.setItem('test_key', 'funziona!');
-        const val = await AsyncStorage.getItem('test_key');
-        console.log('Test Storage Locale:', val);
       } catch (e) {
-        console.error('Critical error: phone can\'t write to storage', e);
+        console.error('Critical storage error', e);
       }
+
+      // --- CONTROLLO URL RECUPERO (Specifico per Web) ---
+      // Lo facciamo SUBITO, prima di controllare l'auth standard
+      if (Platform.OS === 'web') {
+        const hash = window.location.hash;
+        // Se c'è un hash che indica recupero password...
+        if (hash && (hash.includes('type=recovery') || hash.includes('access_token'))) {
+          console.log("2. URL di Recovery rilevato all'avvio!");
+          
+          // Impostiamo lo stato di reset
+          setIsResettingPassword(true);
+          setInitialStep('reset_password');
+          
+          // Importante: togliamo il caricamento ma NON carichiamo l'utente
+          // così rimaniamo sulla WelcomeScreen
+          setIsLoading(false); 
+          return; // STOP: Non eseguire checkAuth()
+        }
+      }
+
+      // Se non siamo in recovery, controlla l'utente normalmente
+      await checkAuth();
     };
 
-    testStorage();
-    checkAuth();
-  }, []);
+    initializeApp();
+
+    // --- ASCOLTATORE EVENTI AUTH ---
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("3. Evento Auth:", event);
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        // Evento specifico di recupero
+        console.log('Recovery mode attivata via Evento.');
+        setIsResettingPassword(true);
+        setInitialStep('reset_password');
+        setIsLoading(false);
+      
+      } else if (event === 'SIGNED_IN') {
+        // QUI È IL PUNTO CRITICO:
+        // Se l'utente clicca sul link della mail, Supabase fa il login automatico (SIGNED_IN).
+        // Ma noi dobbiamo BLOCCARE il reindirizzamento alla Home se stiamo resettando la password.
+        
+        // Controllo 1: Se lo stato locale dice che stiamo resettando
+        if (isResettingPassword || initialStep === 'reset_password') {
+          console.log('BLOCCO NAVIGAZIONE: Utente loggato ma in fase di reset password.');
+          return; // Esce dalla funzione, non imposta l'user, quindi resta su WelcomeScreen
+        }
+
+        // Controllo 2 (Sicurezza per Web): Se l'URL dice ancora recovery
+        if (Platform.OS === 'web' && window.location.hash.includes('type=recovery')) {
+           console.log('BLOCCO NAVIGAZIONE: Hash URL ancora presente.');
+           setIsResettingPassword(true);
+           setInitialStep('reset_password');
+           return;
+        }
+
+        // Se non stiamo resettando, allora è un login normale -> Carica l'utente e vai alla Home
+        console.log('Login standard rilevato.');
+        setInitialStep('nickname');
+        await checkAuth();
+
+      } else if (event === 'SIGNED_OUT') {
+        // Logout avvenuto (es. dopo aver cambiato password con successo)
+        setUser(null);
+        setIsResettingPassword(false);
+        setInitialStep('nickname');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isResettingPassword, initialStep]); // Le dipendenze sono importanti qui
 
   const checkStorage = async () => {
     const allKeys = await AsyncStorage.getAllKeys();
@@ -71,6 +142,7 @@ export default function App() {
 
   const handleAuthComplete = async () => {
     console.log('App: Authentication complete, checking auth state...');
+    //setIsResettingPassword(false);
     setIsLoading(true);
     setTimeout(async () => await checkAuth(), 1000);
   };
@@ -96,11 +168,16 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!user || isResettingPassword || initialStep === 'reset_password') {
     return (
       <>
         <StatusBar style="light" />
-        <WelcomeScreen onComplete={handleAuthComplete} />
+        <WelcomeScreen 
+          onComplete={ () => {
+            setIsResettingPassword(false);
+            handleAuthComplete();
+          }}
+          initialStep={initialStep as any} />
       </>
     );
   }

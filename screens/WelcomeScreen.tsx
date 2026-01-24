@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -14,16 +14,19 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../styles/theme';
 import { authService } from '../services/authService';
+import { supabase } from '../services/supabase';
 
 interface WelcomeScreenProps {
     onComplete: () => void;
+    initialStep?: OnboardingStep;
 }
 
-type OnboardingStep = 'nickname' | 'optional' | 'privacy';
+type OnboardingStep = 'nickname' | 'optional' | 'privacy' | 'reset_password';
 
-export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreenProps) {
+    console.log('WelcomeScreen initial step: ', initialStep);
     const [isLoginMode, setIsLoginMode] = useState(false);
-    const [step, setStep] = useState<OnboardingStep>('nickname');
+    const [step, setStep] = useState<OnboardingStep>(initialStep ||'nickname');
     const [nickname, setNickname] = useState('');
     const [password, setPassword] = useState('');
     const [email, setEmail] = useState('');
@@ -32,6 +35,28 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
     const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
     const [checkingNickname, setCheckingNickname] = useState(false);
     const [isSecureExpanded, setIsSecureExpanded] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+
+    useEffect(() => {
+        // 1. Piano A: Controlla se l'URL del browser ha il token di reset
+        if (Platform.OS === 'web') {
+            const hash = window.location.hash;
+            if (hash && (hash.includes('type=recovery') || hash.includes('access_token'))) {
+                console.log("WelcomeScreen: Reset rilevato da URL Hash!");
+                setStep('reset_password');
+            }
+        }
+
+        // 2. Piano B: Ascolta l'evento ufficiale di Supabase direttamente qui
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            console.log("WelcomeScreen Evento Auth:", event);
+            if (event === 'PASSWORD_RECOVERY') {
+                setStep('reset_password');
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     // Check nickname availability
     const checkNickname = async (value: string) => {
@@ -39,7 +64,6 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
             setNicknameAvailable(null);
             return;
         }
-
         setCheckingNickname(true);
         try {
             const available = await authService.checkNicknameAvailability(value);
@@ -81,7 +105,33 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
 
             onComplete();
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to create account');
+            if (error.message && error.message.includes('USER_EXISTS')) {
+                const title = 'Account already exists';
+                const message = 'This email is already registered. Would you like to reset your password?';
+
+                if (Platform.OS === 'web') {
+                    // Su Web Alert.alert non supporta i bottoni multipli in modo nativo standard
+                    const confirmReset = window.confirm(`${title}\n\n${message}`);
+                    if (confirmReset) {
+                        handleForgotPassword(email);
+                    }
+                } else {
+                    Alert.alert(
+                        title,
+                        message,
+                        [
+                            { text: 'Back', style: 'cancel' },
+                            { 
+                                text: 'Reset Password', 
+                                onPress: () => handleForgotPassword(email) 
+                            }
+                        ]
+                    );
+                }
+            } else {
+                const msg = error.message || 'Failed to create account';
+                Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+            }
         } finally {
             setLoading(false);
         }
@@ -113,6 +163,15 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
         }
     };
 
+    const handleForgotPassword = async (email: string) => {
+        try {
+            await authService.resetPassword(email);
+            Alert.alert("Email sended", "Check your email for the reset link.");
+        } catch (error: any) {
+            Alert.alert("Error", error.message);
+        }
+    };
+
     const renderStepIndicator = () => (
         <View style={styles.stepIndicator}>
             {(['nickname', 'optional', 'privacy'] as OnboardingStep[]).map((s, index) => (
@@ -129,124 +188,226 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
     );
 
     return (
-        <LinearGradient
-            colors={[theme.colors.primary, theme.colors.primaryDark, theme.colors.secondary]}
-            style={styles.container}
+    <LinearGradient
+        colors={[theme.colors.primary, theme.colors.primaryDark, theme.colors.secondary]}
+        style={styles.container}
+    >
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
         >
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardView}
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
             >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                >
-                    <View style={styles.header}>
-                        <Text style={styles.emoji}>💩</Text>
-                        <Text style={styles.title}>Friendspo</Text>
-                        <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
-                    </View>
+                {step === 'reset_password' ? (
+                    // SCHERMATA PULITA SOLO PER RESET
+                    <View style={[styles.form, { marginTop: 60 }]}>
+                        <View style={styles.header}>
+                            <Text style={{ fontSize: 60, marginBottom: 10 }}>🔐</Text>
+                            <Text style={styles.stepTitle}>Reset Your Password</Text>
+                            <Text style={styles.stepSubtitle}>
+                                Please enter a new secure password for your account.
+                            </Text>
+                        </View>
 
-                    {/* Login/Signup Segmented Control */}
-                    <View style={{
-                        flexDirection: 'row',
-                        backgroundColor: 'rgba(255,255,255,0.1)',
-                        borderRadius: theme.borderRadius.lg,
-                        padding: 4,
-                        marginBottom: theme.spacing.xl,
-                    }}>
-                        <TouchableOpacity
-                            style={{
-                                flex: 1,
-                                paddingVertical: 12,
-                                alignItems: 'center',
-                                borderRadius: theme.borderRadius.md,
-                                backgroundColor: !isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="New Password"
+                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                value={newPassword}
+                                onChangeText={setNewPassword}
+                                secureTextEntry
+                                autoCapitalize="none"
+                            />
+                        </View>
+
+                        <TouchableOpacity 
+                            style={[styles.button, loading && styles.buttonDisabled]} 
+                            disabled={loading}
+                            onPress={async () => {
+                                if (!newPassword || newPassword.length < 6) {
+                                    Alert.alert("Error", "Password must be at least 6 characters");
+                                    return;
+                                }
+
+                                setLoading(true);
+                                try {
+                                    // 1. Aggiorna la password
+                                    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+                                    if (error) {
+                                        Alert.alert("Error", error.message);
+                                        setLoading(false);
+                                    } else {
+
+                                        const handleSuccess = async () => {
+                                        // 1. Logout forzato per pulire la sessione di recupero
+                                        await supabase.auth.signOut();
+                                        
+                                        // 2. Reset stati locali UI
+                                        setNewPassword('');
+                                        setIsLoginMode(true);
+                                        setStep('nickname');
+                                        setLoading(false);
+                                        
+                                        // 3. Notifica App.tsx che abbiamo finito (tramite onComplete se necessario, 
+                                        // ma il signOut scatenerà l'evento in App.tsx che mostrerà la login)
+                                        // In questo caso, basta resettare l'interfaccia.
+            };
+                                        // 2. LOGICA POPUP (DA QUI IN POI È NUOVO)
+                                        if (Platform.OS === 'web') {
+                                            // Pulisci l'URL subito (rimuove il token dalla barra indirizzi)
+                                            window.history.replaceState(null, "", window.location.pathname);
+                                            
+                                            // Alert bloccante del browser
+                                            window.alert("Password Updated! 🎉\n\nYou can now log in with your new credentials.");
+                                            
+                                            // Reset stati e logout
+                                            await handleSuccess();
+                                        } else {
+                                            // Mobile
+                                            Alert.alert("Success! 🎉", "Password updated successfully.", [
+                                                { 
+                                                    text: "Go to Login", 
+                                                    onPress: async () => {
+                                                        await handleSuccess();
+                                                    } 
+                                                }
+                                            ]);
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    setLoading(false);
+                                    Alert.alert("Error", "An unexpected error occurred");
+                                }
                             }}
+                        >
+                            {loading ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={styles.buttonText}>Save New Password 🚀</Text>}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={{ marginTop: 20, alignItems: 'center' }} 
                             onPress={() => {
-                                setIsLoginMode(false);
+                                setIsLoginMode(true);
                                 setStep('nickname');
                             }}
                         >
-                            <Text style={{
-                                color: !isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
-                                fontWeight: 'bold',
-                                fontSize: 16,
-                            }}>Sign Up</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={{
-                                flex: 1,
-                                paddingVertical: 12,
-                                alignItems: 'center',
-                                borderRadius: theme.borderRadius.md,
-                                backgroundColor: isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
-                            }}
-                            onPress={() => {
-                                setIsLoginMode(true);
-                                setPassword('');
-                                setEmail('');
-                            }}
-                        >
-                            <Text style={{
-                                color: isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
-                                fontWeight: 'bold',
-                                fontSize: 16,
-                            }}>Login</Text>
+                            <Text style={{ color: 'white', textDecorationLine: 'underline' }}>
+                                Back to Login
+                            </Text>
                         </TouchableOpacity>
                     </View>
+                ) : (
+                    // MODO STANDARD (WELCOME / LOGIN / SIGNUP)
+                    <>
+                        <View style={styles.header}>
+                            <Text style={styles.emoji}>💩</Text>
+                            <Text style={styles.title}>Friendspo</Text>
+                            <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
+                        </View>
 
-                    {isLoginMode ? (
-                        /* ===== LOGIN MODE ===== */
-                        <View style={styles.form}>
-                            <Text style={styles.stepTitle}>Welcome Back! 👋</Text>
-                            <Text style={styles.stepSubtitle}>
-                                Login with your nickname and password
-                            </Text>
-
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nickname or Email"
-                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                    value={nickname}
-                                    onChangeText={setNickname}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                />
-                            </View>
-
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Password"
-                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry
-                                    autoCapitalize="none"
-                                />
-                            </View>
-
+                        {/* Login/Signup Segmented Control */}
+                        <View style={{
+                            flexDirection: 'row',
+                            backgroundColor: 'rgba(255,255,255,0.1)',
+                            borderRadius: theme.borderRadius.lg,
+                            padding: 4,
+                            marginBottom: theme.spacing.xl,
+                        }}>
                             <TouchableOpacity
-                                style={[styles.button, loading && styles.buttonDisabled]}
-                                onPress={handleLogin}
-                                disabled={loading}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 12,
+                                    alignItems: 'center',
+                                    borderRadius: theme.borderRadius.md,
+                                    backgroundColor: !isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                }}
+                                onPress={() => {
+                                    setIsLoginMode(false);
+                                    setStep('nickname');
+                                }}
                             >
-                                {loading ? (
-                                    <ActivityIndicator color={theme.colors.primary} />
-                                ) : (
-                                    <Text style={styles.buttonText}>Login 🚀</Text>
-                                )}
+                                <Text style={{
+                                    color: !isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
+                                    fontWeight: 'bold',
+                                    fontSize: 16,
+                                }}>Sign Up</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 12,
+                                    alignItems: 'center',
+                                    borderRadius: theme.borderRadius.md,
+                                    backgroundColor: isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                }}
+                                onPress={() => {
+                                    setIsLoginMode(true);
+                                    setPassword('');
+                                    setEmail('');
+                                }}
+                            >
+                                <Text style={{
+                                    color: isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
+                                    fontWeight: 'bold',
+                                    fontSize: 16,
+                                }}>Login</Text>
                             </TouchableOpacity>
                         </View>
-                    ) : (
-                        /* ===== SIGNUP MODE ===== */
-                        <>
-                            {renderStepIndicator()}
 
+                        {isLoginMode ? (
+                            /* ===== LOGIN MODE ===== */
                             <View style={styles.form}>
+                                <Text style={styles.stepTitle}>Welcome Back! 👋</Text>
+                                <Text style={styles.stepSubtitle}>
+                                    Login with your nickname and password
+                                </Text>
+
+                                <View style={styles.inputContainer}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Nickname or Email"
+                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                        value={nickname}
+                                        onChangeText={setNickname}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                    />
+                                </View>
+
+                                <View style={styles.inputContainer}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Password"
+                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        secureTextEntry
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[styles.button, loading && styles.buttonDisabled]}
+                                    onPress={handleLogin}
+                                    disabled={loading}
+                                >
+                                    {loading ? (
+                                        <ActivityIndicator color={theme.colors.primary} />
+                                    ) : (
+                                        <Text style={styles.buttonText}>Login 🚀</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            /* ===== SIGNUP MODE ===== */
+                            <View style={styles.form}>
+                                {renderStepIndicator()}
+
                                 {step === 'nickname' && (
                                     <>
                                         <Text style={styles.stepTitle}>Choose Your Nickname</Text>
@@ -300,7 +461,6 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                                             Create a password to save your progress
                                         </Text>
 
-                                        {/* Expandable Secure Section */}
                                         <TouchableOpacity
                                             style={[styles.secureExpandHeader, isSecureExpanded && styles.secureExpandHeaderActive]}
                                             onPress={() => setIsSecureExpanded(!isSecureExpanded)}
@@ -349,7 +509,6 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                                             </View>
                                         )}
 
-                                        {/* Primary Action Button */}
                                         <TouchableOpacity
                                             style={styles.button}
                                             onPress={() => setStep('privacy')}
@@ -426,12 +585,13 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
                                     </>
                                 )}
                             </View>
-                        </>
-                    )}
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </LinearGradient>
-    );
+                        )}
+                    </>
+                )}
+            </ScrollView>
+        </KeyboardAvoidingView>
+    </LinearGradient>
+);
 }
 
 const styles = StyleSheet.create({
