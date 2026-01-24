@@ -133,13 +133,14 @@ export default function App() {
       // 2. A fresh sign up that hasn't written to DB yet (needs time)
       if (session && !currentUser) {
         console.warn('⚠️ [APP] Session exists but no user record found.');
-        console.log('🔧 [APP] Waiting for fresh sign ups to complete (checking 3 times over 3 seconds)...');
+        console.log('🔧 [APP] Waiting for fresh sign ups to complete (checking 5 times over 10 seconds)...');
 
-        // Try 3 times with 1 second delays (total 3 seconds)
+        // Try 5 times with 2 second delays (total 10 seconds)
+        // This gives the sign up process plenty of time to complete
         let currentUserAfterDelay = null;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          console.log(`🔧 [APP] Attempt ${attempt}/3: Checking for user...`);
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log(`🔧 [APP] Attempt ${attempt}/5: Checking for user...`);
           currentUserAfterDelay = await authService.getCurrentUser();
 
           if (currentUserAfterDelay) {
@@ -150,8 +151,8 @@ export default function App() {
           }
         }
 
-        // Still no user after 3 attempts - this is truly an orphaned session
-        console.warn('⚠️ [APP] Confirmed orphaned session after 3 attempts! Cleaning up...');
+        // Still no user after 5 attempts (10 seconds) - this is truly an orphaned session
+        console.warn('⚠️ [APP] Confirmed orphaned session after 5 attempts! Cleaning up...');
 
         try {
           await supabase.auth.signOut();
