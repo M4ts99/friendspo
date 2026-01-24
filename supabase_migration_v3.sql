@@ -1,5 +1,5 @@
 -- ========================================
--- FRIENDSPO - MIGRATION V3
+-- FRIENDSPO - MIGRATION V3 (UPDATED)
 -- ========================================
 -- Purpose: Add function to migrate data from a Guest ID to a Supabase Auth ID
 -- Run this in the Supabase SQL Editor
@@ -25,14 +25,12 @@ BEGIN
   SET friend_id = new_user_id 
   WHERE friend_id = old_user_id;
 
-  -- 4. Transfer User Profile Data (Nickname, etc)
-  -- We assume the new user row already exists (created by trigger or signUp)
-  -- So we update it with the old user's settings if needed
-  UPDATE users
-  SET 
-    is_sharing_enabled = (SELECT is_sharing_enabled FROM users WHERE id = old_user_id),
-    nickname = (SELECT nickname FROM users WHERE id = old_user_id)
-  WHERE id = new_user_id;
+  -- 4. Create new user profile with old user's data
+  -- Insert the new user with the old user's nickname and settings
+  INSERT INTO users (id, nickname, is_sharing_enabled, email)
+  SELECT new_user_id, nickname, is_sharing_enabled, NULL
+  FROM users
+  WHERE id = old_user_id;
 
   -- 5. Delete the old guest user
   DELETE FROM users WHERE id = old_user_id;

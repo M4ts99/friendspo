@@ -274,27 +274,13 @@ export const authService = {
             const oldUserId = currentUser.id;
 
             console.log('✅ [UPGRADE] Supabase user created:', newUserId);
-
-            // CRITICAL: Create the new user entry in users table BEFORE migration
-            console.log('🔄 [UPGRADE] Creating new user entry in users table...');
-            const { error: createUserError } = await supabase
-                .from('users')
-                .insert([{
-                    id: newUserId,
-                    nickname: currentUser.nickname,
-                    email: email,
-                    is_sharing_enabled: currentUser.is_sharing_enabled
-                }]);
-
-            if (createUserError) {
-                console.error('❌ [UPGRADE] Failed to create new user entry:', createUserError);
-                throw new Error('Failed to create user profile');
-            }
-
-            console.log('✅ [UPGRADE] New user entry created');
             console.log('🔄 [UPGRADE] Migrating data from', oldUserId, 'to', newUserId);
 
             // Migrate Data via RPC
+            // This RPC will:
+            // 1. Transfer sessions and friendships
+            // 2. Update the NEW user with old user's data (nickname, settings)
+            // 3. Delete the OLD user
             const { error: rpcError } = await supabase.rpc('migrate_user_data', {
                 old_user_id: oldUserId,
                 new_user_id: newUserId
@@ -308,7 +294,7 @@ export const authService = {
             console.log('✅ [UPGRADE] Data migration successful');
             console.log('🔄 [UPGRADE] Updating email in users table...');
 
-            // Update email in users table (the RPC doesn't update email)
+            // Update email in users table (the RPC copies nickname but not email)
             const { error: emailUpdateError } = await supabase
                 .from('users')
                 .update({ email: email })
