@@ -162,16 +162,11 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
         try {
             console.log('Calling authService.signIn...');
             await authService.signIn(nickname.trim(), password.trim());
-            setTimeout(() => {
-                console.log('Sign in success, calling onComplete...');
-                onComplete();
-            }, 500);
         } catch (error: any) {
             console.error('Login error:', error);
+            setLoading(false);
             const msg = error.message || 'Invalid credentials';
             Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Login Failed', msg);
-        } finally {
-            setLoading(false);
         }
     };
 

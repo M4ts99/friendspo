@@ -154,38 +154,39 @@ export const authService = {
         }
     },
 
-    // Get current user
-    async getCurrentUser() {
+    // Get current user profile
+    async getCurrentUser(preloadedAuthUser: any = null) {
         try {
             console.log('🔍 [GET_USER] Starting getCurrentUser...');
 
-            // First try to get authenticated user with timeout
-            console.log('🔍 [GET_USER] Calling supabase.auth.getUser()...');
-
-            let user = null;
+            let user = preloadedAuthUser;
             let authError = null;
 
-            try {
-                // Add timeout to prevent infinite hanging
-                const userPromise = supabase.auth.getUser();
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('getUser timeout')), 5000)
-                );
+            // Se NON ci hanno passato l'utente, proviamo a recuperarlo noi
+            if (!user) {
+                console.log('🔍 [GET_USER] No preloaded user, calling supabase.auth.getUser()...');
+                try {
+                    // Add timeout to prevent infinite hanging
+                    const userPromise = supabase.auth.getUser();
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('getUser timeout')), 5000)
+                    );
 
-                const result = await Promise.race([userPromise, timeoutPromise]) as any;
-                user = result.data?.user;
-                authError = result.error;
-                console.log('🔍 [GET_USER] getUser() completed');
-            } catch (error) {
-                console.warn('⚠️ [GET_USER] getUser() failed or timed out:', error);
-                // Continue to local storage check
+                    const result = await Promise.race([userPromise, timeoutPromise]) as any;
+                    user = result.data?.user;
+                    authError = result.error;
+                    console.log('🔍 [GET_USER] getUser() completed');
+                } catch (error) {
+                    console.warn('⚠️ [GET_USER] getUser() failed or timed out:', error);
+                }
+            } else {
+                console.log('🔍 [GET_USER] Using preloaded user (Skipped auth fetch) ✅');
             }
 
-            console.log('Get current user - supabase auth user:', user);
-            if (authError) {
-                console.error('Get current user auth error:', authError);
-            }
+            // --- DA QUI IN POI È UGUALE AL TUO CODICE ---
 
+            console.log('Get current user - supabase auth user:', user?.id);
+            
             if (user) {
                 console.log('Authenticated user found:', user.id);
                 console.log('🔍 [GET_USER] Querying users table for authenticated user...');
@@ -196,11 +197,10 @@ export const authService = {
                     .eq('id', user.id)
                     .maybeSingle();
 
-                if (dbError) {
-                    console.error('❌ [GET_USER] Database error:', dbError);
-                }
-
-                console.log('🔍 [GET_USER] Database result:', data);
+                if (dbError) console.error('❌ [GET_USER] Database error:', dbError);
+                
+                // Se l'utente auth esiste ma non c'è nel DB (caso raro ma possibile), 
+                // ritorniamo null per forzare un logout/pulizia o gestirlo
                 return data;
             }
 
@@ -208,8 +208,7 @@ export const authService = {
             console.log('🔍 [GET_USER] No auth user, checking local storage...');
             const AsyncStorage = require('@react-native-async-storage/async-storage').default;
             const userId = await AsyncStorage.getItem('userId');
-            console.log('🔍 [GET_USER] Local storage userId:', userId);
-
+            
             if (userId) {
                 console.log('🔍 [GET_USER] Querying users table for anonymous user...');
                 const { data, error: dbError } = await supabase
@@ -218,15 +217,10 @@ export const authService = {
                     .eq('id', userId)
                     .maybeSingle();
 
-                if (dbError) {
-                    console.error('❌ [GET_USER] Database error:', dbError);
-                }
-
-                console.log('🔍 [GET_USER] Database result:', data);
+                if (dbError) console.error('❌ [GET_USER] Database error:', dbError);
                 return data;
             }
 
-            console.log('🔍 [GET_USER] No user found, returning null');
             return null;
         } catch (error) {
             console.error('Get current user error:', error);
@@ -409,7 +403,8 @@ export const authService = {
         const user = await this.getCurrentUser();
         if (!user) throw new Error('No user found');
 
-        const hasPassword = !!(user.email);
+        const { data: authData} = await supabase.auth.getUser();
+        const hasPassword = authData.user?.app_metadata?.provider === 'email' || !!authData.user?.email;
 
         // Check nickname change cooldown (7 days)
         let canChangeNickname = true;
@@ -417,20 +412,19 @@ export const authService = {
 
         if (user.last_nickname_change) {
             const lastChange = new Date(user.last_nickname_change);
-            const cooldownEnd = new Date(lastChange.getTime() + 7 * 24 * 60 * 60 * 1000);
-            if (new Date() < cooldownEnd) {
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+            if (lastChange > sevenDaysAgo) {
                 canChangeNickname = false;
-                nextNicknameChange = cooldownEnd;
+                // Compute next allowed change date
+                nextNicknameChange = new Date(lastChange);
+                nextNicknameChange.setDate(nextNicknameChange.getDate() + 7);
             }
         }
 
-        // Only show real emails, not placeholder emails
-        const displayEmail = user.email && !user.email.includes('@friendspo.placeholder')
-            ? user.email
-            : null;
-
         return {
-            email: displayEmail,
+            email: authData.user?.email || null,
             hasPassword,
             nickname: user.nickname,
             canChangeNickname,
@@ -460,47 +454,66 @@ export const authService = {
     },
 
     // Change nickname (requires password verification and 7-day cooldown)
-    async changeNickname(newNickname: string, currentPassword: string): Promise<void> {
-        const user = await this.getCurrentUser();
-        if (!user) throw new Error('No user found');
+    async changeNickname(newNickname: string, password?: string) {
+        try {
+            const user = await this.getCurrentUser();
+            if (!user) throw new Error('User not found');
 
-        // Check cooldown
-        if (user.last_nickname_change) {
-            const lastChange = new Date(user.last_nickname_change);
-            const cooldownEnd = new Date(lastChange.getTime() + 7 * 24 * 60 * 60 * 1000);
-            if (new Date() < cooldownEnd) {
-                const daysLeft = Math.ceil((cooldownEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-                throw new Error(`You can change your nickname again in ${daysLeft} days`);
+            // 1. Verifica disponibilità nickname
+            const isAvailable = await this.checkNicknameAvailability(newNickname);
+            if (!isAvailable) {
+                throw new Error('This nickname is already taken');
             }
-        }
 
-        // Check if user has password (need to verify)
-        if (user.email) {
-            const { error: signInError } = await supabase.auth.signInWithPassword({
-                email: user.email,
-                password: currentPassword,
-            });
-            if (signInError) throw new Error('Password is incorrect');
-        }
+            // 2. Verifica Password (se l'utente ha una email/password)
+            // Per verificare la password senza fare logout, proviamo un signIn
+            // Nota: Supabase non ha un metodo "verifyPassword" diretto pulito, 
+            // ma questo è il metodo standard sicuro.
+            const { data: authUser } = await supabase.auth.getUser();
+            
+            if (authUser.user?.email && password) {
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: authUser.user.email,
+                password: password,
+                });
 
-        // Check if new nickname is available
-        const isAvailable = await this.checkNicknameAvailability(newNickname);
-        if (!isAvailable) throw new Error('Nickname is already taken');
+                if (signInError) {
+                throw new Error('Incorrect password');
+                }
+            }
 
-        // Update nickname
-        const { error: updateError } = await supabase
-            .from('users')
-            .update({
+            // 3. Controllo Cooldown (opzionale, per sicurezza lato backend)
+            if (user.last_nickname_change) {
+                const lastChange = new Date(user.last_nickname_change);
+                const diffTime = Math.abs(new Date().getTime() - lastChange.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                if (diffDays < 7) {
+                    throw new Error('You must wait 7 days before changing nickname again');
+                }
+            }
+
+            // 4. Aggiornamento nel Database (Tabella users)
+            // Questo NON manda mail, aggiorna solo il profilo pubblico
+            const { error: updateError } = await supabase
+                .from('users')
+                .update({ 
                 nickname: newNickname,
                 last_nickname_change: new Date().toISOString()
-            })
-            .eq('id', user.id);
+                })
+                .eq('id', user.id);
 
-        if (updateError) throw updateError;
+            if (updateError) throw updateError;
 
-        // Update local storage
-        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-        await AsyncStorage.setItem('nickname', newNickname);
+            // Aggiorniamo anche il local storage per l'interfaccia immediata
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            await AsyncStorage.setItem('nickname', newNickname);
+
+            return true;
+
+        } catch (error) {
+            console.error('Change nickname error:', error);
+            throw error;
+        }
     },
 
     // Add email to existing account (for password reset capability)

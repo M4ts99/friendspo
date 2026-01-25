@@ -24,12 +24,14 @@ interface SettingsScreenProps {
     userId: string;
     nickname: string;
     onLogout: () => void;
+    onUserUpdate: (data: { nickname: string }) => void;
 }
 
 export default function SettingsScreen({
     userId,
     nickname,
     onLogout,
+    onUserUpdate,
 }: SettingsScreenProps) {
     const [isSharingEnabled, setIsSharingEnabled] = useState(true);
     const [friends, setFriends] = useState<User[]>([]);
@@ -233,12 +235,38 @@ export default function SettingsScreen({
 
         setUpdating(true);
         try {
+            // 1. Chiamata al servizio (aggiorna DB e LocalStorage)
             await authService.changeNickname(newNickname, nicknamePassword);
-            Alert.alert('Success', 'Nickname changed successfully!');
+            
+            Alert.alert('Success', 'Nickname changed successfully! 🥸');
+            
+            // 2. Chiudi modale e pulisci i campi
             setChangeNicknameModalVisible(false);
+            setNicknamePassword(''); // Pulisci la password per sicurezza
+            
+            // 3. AGGIORNAMENTO ISTANTANEO UI (La parte che ti mancava)
+            // Aggiorniamo manualmente lo stato locale "accountInfo" così React
+            // ridisegna subito il componente con il nuovo nome.
+            setAccountInfo(prev => {
+                if (!prev) return null; // Caso limite
+                
+                // Calcoliamo la data del prossimo cambio (tra 7 giorni)
+                const nextDate = new Date();
+                nextDate.setDate(nextDate.getDate() + 7);
+
+                return {
+                    ...prev,
+                    nickname: newNickname, // Inseriamo il nuovo nome inserito nell'input
+                    canChangeNickname: false, // Disabilitiamo il pulsante change
+                    nextNicknameChange: nextDate 
+                };
+            });
+
+            onUserUpdate({ nickname: newNickname });
+            
+            // Opzionale: pulisci il campo input del nuovo nome solo alla fine
             setNewNickname('');
-            setNicknamePassword('');
-            loadAccountInfo();
+
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to change nickname');
         } finally {

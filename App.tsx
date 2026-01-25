@@ -11,8 +11,9 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import HomeScreen from './screens/HomeScreen';
 import StatsScreen from './screens/StatsScreen';
 import FeedScreen from './screens/FeedScreen';
+import LeagueScreen from './screens/LeagueScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import { Home, BarChart2, Activity, Settings } from 'lucide-react-native';
+import { Home, BarChart2, Activity, Settings, Trophy } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './services/supabase';
 import { enableScreens } from 'react-native-screens';
@@ -27,6 +28,14 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [initialStep, setInitialStep] = useState<'nickname' | 'optional' | 'privacy' | 'reset_password'>('nickname');
+
+  const handleUserUpdate = (updatedFields: any) => {
+    console.log('🔄 [APP] Updating global user state:', updatedFields);
+    setUser((prevUser: any) => {
+      if (!prevUser) return null;
+      return { ...prevUser, ...updatedFields };
+    });
+  };
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -100,7 +109,20 @@ export default function App() {
         // Se non stiamo resettando, allora è un login normale -> Carica l'utente e vai alla Home
         console.log('Login standard rilevato.');
         //setInitialStep('nickname');
-        await checkAuth();
+        if (session?.user) {
+            console.log('⚡️ [APP] Passaggio utente diretto a getCurrentUser (Fast Path)');
+            try {
+                // Passiamo session.user come parametro! 
+                // Questo evita che getCurrentUser chiami di nuovo getUser()
+                const currentUser = await authService.getCurrentUser(session.user);
+                setUser(currentUser);
+            } catch (e) {
+                console.error("Errore caricamento profilo:", e);
+            }
+        } else {
+            // Fallback al metodo classico se per caso session è null
+            await checkAuth(); 
+        }
 
       } else if (event === 'SIGNED_OUT') {
         // Logout avvenuto (es. dopo aver cambiato password con successo)
@@ -237,6 +259,15 @@ export default function App() {
           >
             {() => <HomeScreen userId={user.id} />}
           </Tab.Screen>
+          
+          <Tab.Screen
+            name="Leagues"
+            options={{
+              tabBarIcon: ({ color, size }) => <Trophy color={color} size={size} />,
+            }}
+          >
+            {() => <LeagueScreen userId={user.id} />}
+          </Tab.Screen>
 
           <Tab.Screen
             name="Stats"
@@ -267,6 +298,7 @@ export default function App() {
                 userId={user.id}
                 nickname={user.nickname}
                 onLogout={handleLogout}
+                onUserUpdate={handleUserUpdate}
               />
             )}
           </Tab.Screen>
