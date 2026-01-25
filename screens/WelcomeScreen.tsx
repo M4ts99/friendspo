@@ -10,6 +10,7 @@ import {
     Alert,
     ActivityIndicator,
     ScrollView,
+    Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../styles/theme';
@@ -26,7 +27,7 @@ type OnboardingStep = 'nickname' | 'optional' | 'privacy' | 'reset_password';
 export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreenProps) {
     console.log('WelcomeScreen initial step: ', initialStep);
     const [isLoginMode, setIsLoginMode] = useState(false);
-    const [step, setStep] = useState<OnboardingStep>(initialStep ||'nickname');
+    const [step, setStep] = useState<OnboardingStep>(initialStep || 'nickname');
     const [nickname, setNickname] = useState('');
     const [password, setPassword] = useState('');
     const [email, setEmail] = useState('');
@@ -36,6 +37,8 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
     const [checkingNickname, setCheckingNickname] = useState(false);
     const [isSecureExpanded, setIsSecureExpanded] = useState(false);
     const [newPassword, setNewPassword] = useState('');
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState('');
 
     useEffect(() => {
         // 1. Piano A: Controlla se l'URL del browser ha il token di reset
@@ -103,6 +106,15 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
                 isSharing
             );
 
+            // Wait a bit to ensure the user is created in the database
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Verify user was created before proceeding
+            const user = await authService.getCurrentUser();
+            if (!user) {
+                throw new Error('Failed to create user account. Please try again.');
+            }
+
             onComplete();
         } catch (error: any) {
             if (error.message && error.message.includes('USER_EXISTS')) {
@@ -121,9 +133,9 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
                         message,
                         [
                             { text: 'Back', style: 'cancel' },
-                            { 
-                                text: 'Reset Password', 
-                                onPress: () => handleForgotPassword(email) 
+                            {
+                                text: 'Reset Password',
+                                onPress: () => handleForgotPassword(email)
                             }
                         ]
                     );
@@ -188,50 +200,50 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
     );
 
     return (
-    <LinearGradient
-        colors={[theme.colors.primary, theme.colors.primaryDark, theme.colors.secondary]}
-        style={styles.container}
-    >
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardView}
+        <LinearGradient
+            colors={[theme.colors.primary, theme.colors.primaryDark, theme.colors.secondary]}
+            style={styles.container}
         >
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={true}
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardView}
             >
-                {step === 'reset_password' ? (
-                    // SCHERMATA PULITA SOLO PER RESET
-                    <View style={[styles.form, { marginTop: 60 }]}>
-                        <View style={styles.header}>
-                            <Text style={{ fontSize: 60, marginBottom: 10 }}>🔐</Text>
-                            <Text style={styles.stepTitle}>Reset Your Password</Text>
-                            <Text style={styles.stepSubtitle}>
-                                Please enter a new secure password for your account.
-                            </Text>
-                        </View>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={true}
+                >
+                    {step === 'reset_password' ? (
+                        // SCHERMATA PULITA SOLO PER RESET
+                        <View style={[styles.form, { marginTop: 60 }]}>
+                            <View style={styles.header}>
+                                <Text style={{ fontSize: 60, marginBottom: 10 }}>🔐</Text>
+                                <Text style={styles.stepTitle}>Reset Your Password</Text>
+                                <Text style={styles.stepSubtitle}>
+                                    Please enter a new secure password for your account.
+                                </Text>
+                            </View>
 
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="New Password"
-                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                value={newPassword}
-                                onChangeText={setNewPassword}
-                                secureTextEntry
-                                autoCapitalize="none"
-                            />
-                        </View>
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="New Password"
+                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                    value={newPassword}
+                                    onChangeText={setNewPassword}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                />
+                            </View>
 
-                        <TouchableOpacity 
-                            style={[styles.button, loading && styles.buttonDisabled]} 
-                            disabled={loading}
-                            onPress={async () => {
-                                if (!newPassword || newPassword.length < 6) {
-                                    Alert.alert("Error", "Password must be at least 6 characters");
-                                    return;
-                                }
+                            <TouchableOpacity
+                                style={[styles.button, loading && styles.buttonDisabled]}
+                                disabled={loading}
+                                onPress={async () => {
+                                    if (!newPassword || newPassword.length < 6) {
+                                        Alert.alert("Error", "Password must be at least 6 characters");
+                                        return;
+                                    }
 
                                 setLoading(true);
                                 try {
@@ -241,13 +253,12 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
                                         throw new Error("Session expired. Please click the email link again.");
                                     }
                                     // 1. Aggiorna la password
-                                    
                                     const { error } = await supabase.auth.updateUser({ password: newPassword });
 
-                                    if (error) {
-                                        Alert.alert("Error", error.message);
-                                        setLoading(false);
-                                    } else {
+                                        if (error) {
+                                            Alert.alert("Error", error.message);
+                                            setLoading(false);
+                                        } else {
 
                                         const handleSuccess = async () => {
                                         // 1. Logout forzato per pulire la sessione di recupero
@@ -296,309 +307,373 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
                             {loading ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={styles.buttonText}>Save New Password 🚀</Text>}
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
-                            style={{ marginTop: 20, alignItems: 'center' }} 
-                            onPress={() => {
-                                setIsLoginMode(true);
-                                setStep('nickname');
-                            }}
-                        >
-                            <Text style={{ color: 'white', textDecorationLine: 'underline' }}>
-                                Back to Login
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    // MODO STANDARD (WELCOME / LOGIN / SIGNUP)
-                    <>
-                        <View style={styles.header}>
-                            <Text style={styles.emoji}>💩</Text>
-                            <Text style={styles.title}>Friendspo</Text>
-                            <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
-                        </View>
-
-                        {/* Login/Signup Segmented Control */}
-                        <View style={{
-                            flexDirection: 'row',
-                            backgroundColor: 'rgba(255,255,255,0.1)',
-                            borderRadius: theme.borderRadius.lg,
-                            padding: 4,
-                            marginBottom: theme.spacing.xl,
-                        }}>
                             <TouchableOpacity
-                                style={{
-                                    flex: 1,
-                                    paddingVertical: 12,
-                                    alignItems: 'center',
-                                    borderRadius: theme.borderRadius.md,
-                                    backgroundColor: !isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
-                                }}
+                                style={{ marginTop: 20, alignItems: 'center' }}
                                 onPress={() => {
-                                    setIsLoginMode(false);
+                                    setIsLoginMode(true);
                                     setStep('nickname');
                                 }}
                             >
-                                <Text style={{
-                                    color: !isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
-                                    fontWeight: 'bold',
-                                    fontSize: 16,
-                                }}>Sign Up</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={{
-                                    flex: 1,
-                                    paddingVertical: 12,
-                                    alignItems: 'center',
-                                    borderRadius: theme.borderRadius.md,
-                                    backgroundColor: isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
-                                }}
-                                onPress={() => {
-                                    setIsLoginMode(true);
-                                    setPassword('');
-                                    setEmail('');
-                                }}
-                            >
-                                <Text style={{
-                                    color: isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
-                                    fontWeight: 'bold',
-                                    fontSize: 16,
-                                }}>Login</Text>
+                                <Text style={{ color: 'white', textDecorationLine: 'underline' }}>
+                                    Back to Login
+                                </Text>
                             </TouchableOpacity>
                         </View>
+                    ) : (
+                        // MODO STANDARD (WELCOME / LOGIN / SIGNUP)
+                        <>
+                            <View style={styles.header}>
+                                <Text style={styles.emoji}>💩</Text>
+                                <Text style={styles.title}>Friendspo</Text>
+                                <Text style={styles.subtitle}>Track. Compare. Compete.</Text>
+                            </View>
 
-                        {isLoginMode ? (
-                            /* ===== LOGIN MODE ===== */
-                            <View style={styles.form}>
-                                <Text style={styles.stepTitle}>Welcome Back! 👋</Text>
-                                <Text style={styles.stepSubtitle}>
-                                    Login with your nickname and password
-                                </Text>
-
-                                <View style={styles.inputContainer}>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="Nickname or Email"
-                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                        value={nickname}
-                                        onChangeText={setNickname}
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                    />
-                                </View>
-
-                                <View style={styles.inputContainer}>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="Password"
-                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                        value={password}
-                                        onChangeText={setPassword}
-                                        secureTextEntry
-                                        autoCapitalize="none"
-                                    />
-                                </View>
-
+                            {/* Login/Signup Segmented Control */}
+                            <View style={{
+                                flexDirection: 'row',
+                                backgroundColor: 'rgba(255,255,255,0.1)',
+                                borderRadius: theme.borderRadius.lg,
+                                padding: 4,
+                                marginBottom: theme.spacing.xl,
+                            }}>
                                 <TouchableOpacity
-                                    style={[styles.button, loading && styles.buttonDisabled]}
-                                    onPress={handleLogin}
-                                    disabled={loading}
+                                    style={{
+                                        flex: 1,
+                                        paddingVertical: 12,
+                                        alignItems: 'center',
+                                        borderRadius: theme.borderRadius.md,
+                                        backgroundColor: !isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                    }}
+                                    onPress={() => {
+                                        setIsLoginMode(false);
+                                        setStep('nickname');
+                                    }}
                                 >
-                                    {loading ? (
-                                        <ActivityIndicator color={theme.colors.primary} />
-                                    ) : (
-                                        <Text style={styles.buttonText}>Login 🚀</Text>
-                                    )}
+                                    <Text style={{
+                                        color: !isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
+                                        fontWeight: 'bold',
+                                        fontSize: 16,
+                                    }}>Sign Up</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={{
+                                        flex: 1,
+                                        paddingVertical: 12,
+                                        alignItems: 'center',
+                                        borderRadius: theme.borderRadius.md,
+                                        backgroundColor: isLoginMode ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                    }}
+                                    onPress={() => {
+                                        setIsLoginMode(true);
+                                        setPassword('');
+                                        setEmail('');
+                                    }}
+                                >
+                                    <Text style={{
+                                        color: isLoginMode ? theme.colors.text : 'rgba(255,255,255,0.6)',
+                                        fontWeight: 'bold',
+                                        fontSize: 16,
+                                    }}>Login</Text>
                                 </TouchableOpacity>
                             </View>
-                        ) : (
-                            /* ===== SIGNUP MODE ===== */
-                            <View style={styles.form}>
-                                {renderStepIndicator()}
 
-                                {step === 'nickname' && (
-                                    <>
-                                        <Text style={styles.stepTitle}>Choose Your Nickname</Text>
-                                        <Text style={styles.stepSubtitle}>
-                                            This is how your friends will find you
-                                        </Text>
+                            {isLoginMode ? (
+                                /* ===== LOGIN MODE ===== */
+                                <View style={styles.form}>
+                                    <Text style={styles.stepTitle}>Welcome Back! 👋</Text>
+                                    <Text style={styles.stepSubtitle}>
+                                        Login with your nickname and password
+                                    </Text>
 
-                                        <View style={styles.inputContainer}>
-                                            <TextInput
-                                                style={styles.input}
-                                                placeholder="Enter nickname..."
-                                                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                                value={nickname}
-                                                onChangeText={handleNicknameChange}
-                                                autoCapitalize="none"
-                                                autoCorrect={false}
-                                            />
-                                            {checkingNickname && <Text style={styles.inputIcon}>⏳</Text>}
-                                            {!checkingNickname && nicknameAvailable === true && (
-                                                <Text style={styles.inputIcon}>✓</Text>
-                                            )}
-                                            {!checkingNickname && nicknameAvailable === false && (
-                                                <Text style={styles.inputIcon}>✕</Text>
-                                            )}
-                                        </View>
+                                    <View style={styles.inputContainer}>
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Nickname or Email"
+                                            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                            value={nickname}
+                                            onChangeText={setNickname}
+                                            autoCapitalize="none"
+                                            autoCorrect={false}
+                                        />
+                                    </View>
 
-                                        {nicknameAvailable === false && (
-                                            <Text style={styles.errorText}>
-                                                This nickname is already taken
-                                            </Text>
+                                    <View style={styles.inputContainer}>
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Password"
+                                            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            secureTextEntry
+                                            autoCapitalize="none"
+                                        />
+                                    </View>
+
+                                    <TouchableOpacity
+                                        style={[styles.button, loading && styles.buttonDisabled]}
+                                        onPress={handleLogin}
+                                        disabled={loading}
+                                    >
+                                        {loading ? (
+                                            <ActivityIndicator color={theme.colors.primary} />
+                                        ) : (
+                                            <Text style={styles.buttonText}>Login 🚀</Text>
                                         )}
+                                    </TouchableOpacity>
 
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.button,
-                                                (!nickname || nicknameAvailable !== true) &&
-                                                styles.buttonDisabled,
-                                            ]}
-                                            onPress={handleNextFromNickname}
-                                            disabled={!nickname || nicknameAvailable !== true}
-                                        >
-                                            <Text style={styles.buttonText}>Next →</Text>
-                                        </TouchableOpacity>
-                                    </>
-                                )}
-
-                                {step === 'optional' && (
-                                    <>
-                                        <Text style={styles.stepTitle}>Secure Your Account</Text>
-                                        <Text style={styles.stepSubtitle}>
-                                            Create a password to save your progress
+                                    <TouchableOpacity
+                                        style={{ marginTop: theme.spacing.md, alignItems: 'center' }}
+                                        onPress={() => setShowForgotPassword(true)}
+                                    >
+                                        <Text style={{ color: 'rgba(255,255,255,0.7)', textDecorationLine: 'underline' }}>
+                                            Forgot Password?
                                         </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                /* ===== SIGNUP MODE ===== */
+                                <View style={styles.form}>
+                                    {renderStepIndicator()}
 
-                                        <TouchableOpacity
-                                            style={[styles.secureExpandHeader, isSecureExpanded && styles.secureExpandHeaderActive]}
-                                            onPress={() => setIsSecureExpanded(!isSecureExpanded)}
-                                        >
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                <Text style={{ fontSize: 24 }}>🔐</Text>
-                                                <View>
-                                                    <Text style={styles.secureOptionTitle}>Add Password & Email</Text>
-                                                    <Text style={styles.secureOptionSubtitle}>Recommended for recovery</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={styles.arrowIcon}>{isSecureExpanded ? '▲' : '▼'}</Text>
-                                        </TouchableOpacity>
-
-                                        {isSecureExpanded && (
-                                            <View style={styles.secureContent}>
-                                                <View style={styles.warningBox}>
-                                                    <Text style={styles.warningText}>
-                                                        ⚠️ Without a password, logging out will delete your account permanently!
-                                                    </Text>
-                                                </View>
-
-                                                <View style={styles.inputContainer}>
-                                                    <TextInput
-                                                        style={styles.input}
-                                                        placeholder="Email (optional)"
-                                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                                        value={email}
-                                                        onChangeText={setEmail}
-                                                        keyboardType="email-address"
-                                                        autoCapitalize="none"
-                                                    />
-                                                </View>
-
-                                                <View style={styles.inputContainer}>
-                                                    <TextInput
-                                                        style={styles.input}
-                                                        placeholder="Password"
-                                                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                                                        value={password}
-                                                        onChangeText={setPassword}
-                                                        secureTextEntry
-                                                        autoCapitalize="none"
-                                                    />
-                                                </View>
-                                            </View>
-                                        )}
-
-                                        <TouchableOpacity
-                                            style={styles.button}
-                                            onPress={() => setStep('privacy')}
-                                        >
-                                            <Text style={styles.buttonText}>
-                                                {isSecureExpanded && password ? "Next →" : "Continue without Password"}
+                                    {step === 'nickname' && (
+                                        <>
+                                            <Text style={styles.stepTitle}>Choose Your Nickname</Text>
+                                            <Text style={styles.stepSubtitle}>
+                                                This is how your friends will find you
                                             </Text>
-                                        </TouchableOpacity>
-                                    </>
-                                )}
 
-                                {step === 'privacy' && (
-                                    <>
-                                        <Text style={styles.stepTitle}>Privacy Settings</Text>
-                                        <Text style={styles.stepSubtitle}>
-                                            How do you want to use Friendspo?
-                                        </Text>
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="Enter nickname..."
+                                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                    value={nickname}
+                                                    onChangeText={handleNicknameChange}
+                                                    autoCapitalize="none"
+                                                    autoCorrect={false}
+                                                />
+                                                {checkingNickname && <Text style={styles.inputIcon}>⏳</Text>}
+                                                {!checkingNickname && nicknameAvailable === true && (
+                                                    <Text style={styles.inputIcon}>✓</Text>
+                                                )}
+                                                {!checkingNickname && nicknameAvailable === false && (
+                                                    <Text style={styles.inputIcon}>✕</Text>
+                                                )}
+                                            </View>
 
-                                        <View style={styles.privacyOptions}>
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.privacyOption,
-                                                    isSharing && styles.privacyOptionActive,
-                                                ]}
-                                                onPress={() => setIsSharing(true)}
-                                            >
-                                                <View style={styles.privacyContent}>
-                                                    <Text style={styles.privacyEmoji}>👥</Text>
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={[styles.privacyTitle, isSharing && styles.privacyTitleActive]}>
-                                                            Share with Friends
-                                                        </Text>
-                                                        <Text style={styles.privacyDescription}>
-                                                            Shows your timeline to friends
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                                {isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
-                                            </TouchableOpacity>
+                                            {nicknameAvailable === false && (
+                                                <Text style={styles.errorText}>
+                                                    This nickname is already taken
+                                                </Text>
+                                            )}
 
                                             <TouchableOpacity
                                                 style={[
-                                                    styles.privacyOption,
-                                                    !isSharing && styles.privacyOptionActive,
+                                                    styles.button,
+                                                    (!nickname || nicknameAvailable !== true) &&
+                                                    styles.buttonDisabled,
                                                 ]}
-                                                onPress={() => setIsSharing(false)}
+                                                onPress={handleNextFromNickname}
+                                                disabled={!nickname || nicknameAvailable !== true}
                                             >
-                                                <View style={styles.privacyContent}>
-                                                    <Text style={styles.privacyEmoji}>🔒</Text>
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={[styles.privacyTitle, !isSharing && styles.privacyTitleActive]}>
-                                                            Keep Private
-                                                        </Text>
-                                                        <Text style={styles.privacyDescription}>
-                                                            Only you can see your stats
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                                {!isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
+                                                <Text style={styles.buttonText}>Next →</Text>
                                             </TouchableOpacity>
-                                        </View>
+                                        </>
+                                    )}
 
-                                        <TouchableOpacity
-                                            style={[styles.button, loading && styles.buttonDisabled]}
-                                            onPress={handleSignUp}
-                                            disabled={loading}
-                                        >
-                                            {loading ? (
-                                                <ActivityIndicator color={theme.colors.primary} />
-                                            ) : (
-                                                <Text style={styles.buttonText}>Let's Go! 🚀</Text>
-                                            )}
-                                        </TouchableOpacity>
-                                    </>
-                                )}
-                            </View>
-                        )}
-                    </>
-                )}
-            </ScrollView>
-        </KeyboardAvoidingView>
-    </LinearGradient>
-);
+                                    {step === 'optional' && (
+                                        <>
+                                            <Text style={styles.stepTitle}>Create Your Account</Text>
+                                            <Text style={styles.stepSubtitle}>
+                                                Email and password are required to save your progress
+                                            </Text>
+
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="Email *"
+                                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                    value={email}
+                                                    onChangeText={setEmail}
+                                                    keyboardType="email-address"
+                                                    autoCapitalize="none"
+                                                />
+                                            </View>
+
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="Password *"
+                                                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                                                    value={password}
+                                                    onChangeText={setPassword}
+                                                    secureTextEntry
+                                                    autoCapitalize="none"
+                                                />
+                                            </View>
+
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.button,
+                                                    (!email || !password || password.length < 6) && styles.buttonDisabled
+                                                ]}
+                                                onPress={() => setStep('privacy')}
+                                                disabled={!email || !password || password.length < 6}
+                                            >
+                                                <Text style={styles.buttonText}>Next →</Text>
+                                            </TouchableOpacity>
+
+                                            <View style={styles.guestDivider}>
+                                                <View style={styles.dividerLine} />
+                                                <Text style={styles.dividerText}>OR</Text>
+                                                <View style={styles.dividerLine} />
+                                            </View>
+
+                                            <TouchableOpacity
+                                                style={styles.guestButton}
+                                                onPress={() => {
+                                                    setEmail('');
+                                                    setPassword('');
+                                                    setStep('privacy');
+                                                }}
+                                            >
+                                                <Text style={styles.guestButtonText}>👤 Continue as Guest</Text>
+                                                <Text style={styles.guestWarning}>
+                                                    ⚠️ Your data will be lost when you log out
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </>
+                                    )}
+
+                                    {step === 'privacy' && (
+                                        <>
+                                            <Text style={styles.stepTitle}>Privacy Settings</Text>
+                                            <Text style={styles.stepSubtitle}>
+                                                How do you want to use Friendspo?
+                                            </Text>
+
+                                            <View style={styles.privacyOptions}>
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.privacyOption,
+                                                        isSharing && styles.privacyOptionActive,
+                                                    ]}
+                                                    onPress={() => setIsSharing(true)}
+                                                >
+                                                    <View style={styles.privacyContent}>
+                                                        <Text style={styles.privacyEmoji}>👥</Text>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={[styles.privacyTitle, isSharing && styles.privacyTitleActive]}>
+                                                                Share with Friends
+                                                            </Text>
+                                                            <Text style={styles.privacyDescription}>
+                                                                Shows your timeline to friends
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                    {isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
+                                                </TouchableOpacity>
+
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.privacyOption,
+                                                        !isSharing && styles.privacyOptionActive,
+                                                    ]}
+                                                    onPress={() => setIsSharing(false)}
+                                                >
+                                                    <View style={styles.privacyContent}>
+                                                        <Text style={styles.privacyEmoji}>🔒</Text>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={[styles.privacyTitle, !isSharing && styles.privacyTitleActive]}>
+                                                                Keep Private
+                                                            </Text>
+                                                            <Text style={styles.privacyDescription}>
+                                                                Only you can see your stats
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                    {!isSharing && <Text style={styles.privacyCheckmark}>✓</Text>}
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            <TouchableOpacity
+                                                style={[styles.button, loading && styles.buttonDisabled]}
+                                                onPress={handleSignUp}
+                                                disabled={loading}
+                                            >
+                                                {loading ? (
+                                                    <ActivityIndicator color={theme.colors.primary} />
+                                                ) : (
+                                                    <Text style={styles.buttonText}>Let's Go! 🚀</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        </>
+                                    )}
+                                </View>
+                            )}
+                        </>
+                    )}
+                </ScrollView>
+            </KeyboardAvoidingView>
+
+            {/* Forgot Password Modal */}
+            <Modal
+                visible={showForgotPassword}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowForgotPassword(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalTitle}>Reset Password</Text>
+                        <Text style={styles.modalDescription}>
+                            Enter your email address and we'll send you a link to reset your password.
+                        </Text>
+
+                        <TextInput
+                            style={styles.modalInput}
+                            placeholder="Email address"
+                            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                            value={forgotEmail}
+                            onChangeText={setForgotEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+
+                        <TouchableOpacity
+                            style={styles.modalButton}
+                            onPress={async () => {
+                                if (!forgotEmail || !forgotEmail.includes('@')) {
+                                    Alert.alert('Error', 'Please enter a valid email address');
+                                    return;
+                                }
+                                try {
+                                    await authService.resetPassword(forgotEmail);
+                                    Alert.alert('Success', 'Password reset link sent! Check your email.');
+                                    setShowForgotPassword(false);
+                                    setForgotEmail('');
+                                } catch (error: any) {
+                                    Alert.alert('Error', error.message || 'Failed to send reset link');
+                                }
+                            }}
+                        >
+                            <Text style={styles.modalButtonText}>Send Reset Link</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.modalCancelButton}
+                            onPress={() => {
+                                setShowForgotPassword(false);
+                                setForgotEmail('');
+                            }}
+                        >
+                            <Text style={styles.modalCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        </LinearGradient>
+    );
 }
 
 const styles = StyleSheet.create({
@@ -827,5 +902,98 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: theme.spacing.md,
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        padding: theme.spacing.lg,
+    },
+    modalContainer: {
+        backgroundColor: theme.colors.background,
+        borderRadius: theme.borderRadius.xl,
+        padding: theme.spacing.xl,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+    },
+    modalTitle: {
+        fontSize: theme.fontSize.xl,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+        textAlign: 'center',
+        marginBottom: theme.spacing.sm,
+    },
+    modalDescription: {
+        fontSize: theme.fontSize.md,
+        color: theme.colors.textSecondary,
+        textAlign: 'center',
+        marginBottom: theme.spacing.lg,
+    },
+    modalInput: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: theme.borderRadius.md,
+        padding: theme.spacing.md,
+        fontSize: theme.fontSize.md,
+        color: theme.colors.text,
+        marginBottom: theme.spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    modalButton: {
+        backgroundColor: theme.colors.primary,
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.md,
+        alignItems: 'center',
+    },
+    modalButtonText: {
+        fontSize: theme.fontSize.md,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+    },
+    modalCancelButton: {
+        marginTop: theme.spacing.md,
+        alignItems: 'center',
+    },
+    modalCancelText: {
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.md,
+    },
+    // Guest Mode Styles
+    guestDivider: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: theme.spacing.lg,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    dividerText: {
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.sm,
+        marginHorizontal: theme.spacing.md,
+        fontWeight: 'bold',
+    },
+    guestButton: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.md,
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.2)',
+        borderStyle: 'dashed',
+    },
+    guestButtonText: {
+        color: theme.colors.text,
+        fontSize: theme.fontSize.md,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: theme.spacing.xs,
+    },
+    guestWarning: {
+        color: theme.colors.warning || '#FFA500',
+        fontSize: theme.fontSize.sm,
+        textAlign: 'center',
     },
 });

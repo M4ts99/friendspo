@@ -281,12 +281,6 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.md,
         fontWeight: theme.fontWeight.bold,
     },
-    addFriendButtonText: {
-        color: theme.colors.text,
-        fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.bold,
-    },
-    // Removed old rating styles
     messageBubble: {
         backgroundColor: theme.colors.background,
         padding: theme.spacing.sm,

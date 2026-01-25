@@ -1,5 +1,5 @@
 -- ========================================
--- FRIENDSPO - MIGRATION V3
+-- FRIENDSPO - MIGRATION V3 (UPDATED)
 -- ========================================
 -- Purpose: Add function to migrate data from a Guest ID to a Supabase Auth ID
 -- Run this in the Supabase SQL Editor
@@ -9,7 +9,16 @@ RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER -- Run as database owner to bypass RLS during migration
 AS $$
+DECLARE
+  old_nickname TEXT;
+  old_sharing_enabled BOOLEAN;
 BEGIN
+  -- 0. Store old user's data in variables BEFORE deleting
+  SELECT nickname, is_sharing_enabled 
+  INTO old_nickname, old_sharing_enabled
+  FROM users 
+  WHERE id = old_user_id;
+
   -- 1. Transfer Sessions
   UPDATE sessions 
   SET user_id = new_user_id 
@@ -25,16 +34,12 @@ BEGIN
   SET friend_id = new_user_id 
   WHERE friend_id = old_user_id;
 
-  -- 4. Transfer User Profile Data (Nickname, etc)
-  -- We assume the new user row already exists (created by trigger or signUp)
-  -- So we update it with the old user's settings if needed
-  UPDATE users
-  SET 
-    is_sharing_enabled = (SELECT is_sharing_enabled FROM users WHERE id = old_user_id),
-    nickname = (SELECT nickname FROM users WHERE id = old_user_id)
-  WHERE id = new_user_id;
-
-  -- 5. Delete the old guest user
+  -- 4. Delete the old guest user FIRST (to free up the nickname)
   DELETE FROM users WHERE id = old_user_id;
+
+  -- 5. Create new user profile with old user's data
+  INSERT INTO users (id, nickname, is_sharing_enabled, email)
+  VALUES (new_user_id, old_nickname, old_sharing_enabled, NULL);
 END;
 $$;
+

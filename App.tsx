@@ -28,10 +28,10 @@ export default function App() {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [initialStep, setInitialStep] = useState<'nickname' | 'optional' | 'privacy' | 'reset_password'>('nickname');
 
-useEffect(() => {
+  useEffect(() => {
     const initializeApp = async () => {
       console.log('1. Inizializzazione App...');
-      
+
       // Test Storage (opzionale, come da tuo codice)
       try {
         await AsyncStorage.setItem('test_key', 'funziona!');
@@ -46,7 +46,7 @@ useEffect(() => {
         // Se c'è un hash che indica recupero password...
         if (hash && (hash.includes('type=recovery') || hash.includes('access_token'))) {
           console.log("2. URL di Recovery rilevato all'avvio!");
-          
+
           // Impostiamo lo stato di reset
           setIsResettingPassword(true);
           setInitialStep('reset_password');
@@ -62,16 +62,20 @@ useEffect(() => {
     // --- ASCOLTATORE EVENTI AUTH ---
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("3. Evento Auth:", event);
-      
+
       if (event === 'PASSWORD_RECOVERY') {
         // Evento specifico di recupero
         console.log('Recovery mode attivata via Evento.');
         setIsResettingPassword(true);
         setInitialStep('reset_password');
         setIsLoading(false);
-      
+
       } else if (event === 'SIGNED_IN') {
-        // Se siamo in fase di reset (rilevata da URL o evento precedente), rimaniamo lì
+        // QUI È IL PUNTO CRITICO:
+        // Se l'utente clicca sul link della mail, Supabase fa il login automatico (SIGNED_IN).
+        // Ma noi dobbiamo BLOCCARE il reindirizzamento alla Home se stiamo resettando la password.
+
+        // Controllo 1: Se lo stato locale dice che stiamo resettando
         if (isResettingPassword || initialStep === 'reset_password') {
              console.log('Utente loggato tramite link di recupero. Rimango su WelcomeScreen.');
              // Importante: aggiorniamo lo user nello stato locale per permettere l'updateUser
@@ -119,12 +123,41 @@ useEffect(() => {
   const checkAuth = async () => {
     try {
       console.log('App: Checking auth...');
-      
-      // check if session exists
-      const { data: { session } } = await supabase.auth.getSession();
+
+      // check if session exists with timeout
+      console.log('🔍 [APP] Calling supabase.auth.getSession()...');
+
+      let session = null;
+      try {
+        // Add timeout to prevent infinite hanging
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('getSession timeout')), 5000)
+        );
+
+        const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
+        session = result.data?.session;
+        console.log('🔍 [APP] getSession() completed');
+      } catch (error) {
+        console.warn('⚠️ [APP] getSession() failed or timed out:', error);
+        // Continue anyway - getCurrentUser will handle auth check
+      }
+
       console.log('App: Does technical session exist?', !!session);
 
+      console.log('🔍 [APP] Calling authService.getCurrentUser()...');
       const currentUser = await authService.getCurrentUser();
+      console.log('🔍 [APP] getCurrentUser() completed');
+
+      // NOTE: Orphaned session cleanup has been removed from here
+      // It was causing race conditions with the sign up process
+      // The sign up process creates the Supabase Auth user first (triggers SIGNED_IN event)
+      // Then creates the users table entry (takes time)
+      // The cleanup would delete the session before the users table entry was created
+      // 
+      // Orphaned sessions from old placeholder emails are rare and will be cleaned up
+      // when users try to log in (they'll get an error and can create a new account)
+
       if (currentUser) {
         console.log('App: User loaded with success:', currentUser.id);
         setUser(currentUser);
@@ -171,8 +204,8 @@ useEffect(() => {
     return (
       <>
         <StatusBar style="light" />
-        <WelcomeScreen 
-          onComplete={ () => {
+        <WelcomeScreen
+          onComplete={() => {
             setIsResettingPassword(false);
             handleAuthComplete();
           }}
@@ -240,7 +273,7 @@ useEffect(() => {
         </Tab.Navigator>
       </NavigationContainer>
     </>
-  ); 
+  );
 }
 
 const styles = StyleSheet.create({
