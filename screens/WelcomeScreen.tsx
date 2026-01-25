@@ -235,7 +235,13 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
 
                                 setLoading(true);
                                 try {
+                                    // Controlliamo se abbiamo una sessione già attiva
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    if (!session) {
+                                        throw new Error("Session expired. Please click the email link again.");
+                                    }
                                     // 1. Aggiorna la password
+                                    
                                     const { error } = await supabase.auth.updateUser({ password: newPassword });
 
                                     if (error) {
@@ -279,10 +285,11 @@ export default function WelcomeScreen({ onComplete, initialStep }: WelcomeScreen
                                             ]);
                                         }
                                     }
-                                } catch (err) {
+                                } catch (err: any) {
                                     console.error(err);
                                     setLoading(false);
-                                    Alert.alert("Error", "An unexpected error occurred");
+                                    const msg = err.message || "An unexpected error occurred";
+                                    Platform.OS === 'web' ? window.alert(msg) : Alert.alert("Error", msg);
                                 }
                             }}
                         >

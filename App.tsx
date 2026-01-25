@@ -50,11 +50,6 @@ useEffect(() => {
           // Impostiamo lo stato di reset
           setIsResettingPassword(true);
           setInitialStep('reset_password');
-          
-          // Importante: togliamo il caricamento ma NON carichiamo l'utente
-          // così rimaniamo sulla WelcomeScreen
-          setIsLoading(false); 
-          return; // STOP: Non eseguire checkAuth()
         }
       }
 
@@ -76,27 +71,31 @@ useEffect(() => {
         setIsLoading(false);
       
       } else if (event === 'SIGNED_IN') {
-        // QUI È IL PUNTO CRITICO:
-        // Se l'utente clicca sul link della mail, Supabase fa il login automatico (SIGNED_IN).
-        // Ma noi dobbiamo BLOCCARE il reindirizzamento alla Home se stiamo resettando la password.
-        
-        // Controllo 1: Se lo stato locale dice che stiamo resettando
+        // Se siamo in fase di reset (rilevata da URL o evento precedente), rimaniamo lì
         if (isResettingPassword || initialStep === 'reset_password') {
-          console.log('BLOCCO NAVIGAZIONE: Utente loggato ma in fase di reset password.');
-          return; // Esce dalla funzione, non imposta l'user, quindi resta su WelcomeScreen
+             console.log('Utente loggato tramite link di recupero. Rimango su WelcomeScreen.');
+             // Importante: aggiorniamo lo user nello stato locale per permettere l'updateUser
+             if (session?.user) {
+                 setUser(session.user); 
+             }
+             setIsLoading(false);
+             return; 
         }
 
         // Controllo 2 (Sicurezza per Web): Se l'URL dice ancora recovery
         if (Platform.OS === 'web' && window.location.hash.includes('type=recovery')) {
-           console.log('BLOCCO NAVIGAZIONE: Hash URL ancora presente.');
-           setIsResettingPassword(true);
-           setInitialStep('reset_password');
-           return;
+          console.log('BLOCCO NAVIGAZIONE: Hash URL ancora presente.');
+          setIsResettingPassword(true);
+          setInitialStep('reset_password');
+          if (session?.user) 
+            setUser(session.user);
+          setIsLoading(false);
+          return;
         }
 
         // Se non stiamo resettando, allora è un login normale -> Carica l'utente e vai alla Home
         console.log('Login standard rilevato.');
-        setInitialStep('nickname');
+        //setInitialStep('nickname');
         await checkAuth();
 
       } else if (event === 'SIGNED_OUT') {
@@ -110,7 +109,7 @@ useEffect(() => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [isResettingPassword, initialStep]); // Le dipendenze sono importanti qui
+  }, []); 
 
   const checkStorage = async () => {
     const allKeys = await AsyncStorage.getAllKeys();
