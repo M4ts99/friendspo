@@ -20,6 +20,9 @@ import FriendsOverlay from '../components/FriendsOverlay';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { User as UserIcon, Settings as SettingsIcon, ChevronRight, AlertTriangle, Lock, Mail, Key } from 'lucide-react-native';
 
+// 1. IMPORTA IL WRAPPER
+import { ScreenContainer } from '../components/ScreenContainer';
+
 interface SettingsScreenProps {
     userId: string;
     nickname: string;
@@ -235,36 +238,29 @@ export default function SettingsScreen({
 
         setUpdating(true);
         try {
-            // 1. Chiamata al servizio (aggiorna DB e LocalStorage)
+            // 1. Chiamata al servizio
             await authService.changeNickname(newNickname, nicknamePassword);
-            
+
             Alert.alert('Success', 'Nickname changed successfully! 🥸');
-            
+
             // 2. Chiudi modale e pulisci i campi
             setChangeNicknameModalVisible(false);
-            setNicknamePassword(''); // Pulisci la password per sicurezza
-            
-            // 3. AGGIORNAMENTO ISTANTANEO UI (La parte che ti mancava)
-            // Aggiorniamo manualmente lo stato locale "accountInfo" così React
-            // ridisegna subito il componente con il nuovo nome.
+            setNicknamePassword('');
+
+            // 3. Aggiornamento UI immediato
             setAccountInfo(prev => {
-                if (!prev) return null; // Caso limite
-                
-                // Calcoliamo la data del prossimo cambio (tra 7 giorni)
+                if (!prev) return null;
                 const nextDate = new Date();
                 nextDate.setDate(nextDate.getDate() + 7);
-
                 return {
                     ...prev,
-                    nickname: newNickname, // Inseriamo il nuovo nome inserito nell'input
-                    canChangeNickname: false, // Disabilitiamo il pulsante change
-                    nextNicknameChange: nextDate 
+                    nickname: newNickname,
+                    canChangeNickname: false,
+                    nextNicknameChange: nextDate
                 };
             });
 
             onUserUpdate({ nickname: newNickname });
-            
-            // Opzionale: pulisci il campo input del nuovo nome solo alla fine
             setNewNickname('');
 
         } catch (error: any) {
@@ -273,8 +269,6 @@ export default function SettingsScreen({
             setUpdating(false);
         }
     };
-
-    // confirmAction replaced by state-based implementation above
 
     const handleToggleSharing = async (value: boolean) => {
         try {
@@ -294,7 +288,6 @@ export default function SettingsScreen({
         } catch (error: any) {
             const msg = error.message || 'Failed to update privacy settings';
             Platform.OS === 'web' ? window.alert(`Error: ${msg}`) : Alert.alert('Error', msg);
-            // Revert back on error
             setIsSharingEnabled(!value);
         }
     };
@@ -304,7 +297,6 @@ export default function SettingsScreen({
             '⚠️ Delete Profile',
             'Are you sure you want to delete your profile?\n\nThis will permanently delete:\n• All your sessions\n• All friendships\n• All stats and data\n\nThis action CANNOT be undone!',
             () => {
-                // Second confirmation
                 setTimeout(() => {
                     confirmAction(
                         '🛑 Final Warning',
@@ -353,14 +345,12 @@ export default function SettingsScreen({
             console.log('Has password:', hasPassword);
 
             if (!hasPassword) {
-                // Warning for passwordless accounts
                 confirmAction(
                     '⚠️ Warning: No Password Set',
                     'You did not set a password for this account!\n\nIf you logout now, you will NOT be able to log back in and your account will be PERMANENTLY DELETED.\n\nAre you sure you want to logout and delete your account?',
                     async () => {
                         try {
                             console.log('Deleting anonymous profile...');
-                            // Delete account for passwordless users
                             await authService.deleteProfile(userId);
                             onLogout();
                         } catch (error: any) {
@@ -372,7 +362,6 @@ export default function SettingsScreen({
                     'Logout & Delete'
                 );
             } else {
-                // Normal logout for users with password
                 confirmAction(
                     'Logout',
                     'Are you sure you want to logout?',
@@ -396,207 +385,215 @@ export default function SettingsScreen({
     };
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                <SettingsIcon size={60} color={theme.colors.text} style={{ marginBottom: theme.spacing.sm }} />
-                <Text style={styles.headerTitle}>Settings</Text>
-            </View>
-
-            {/* Profile Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Profile</Text>
-
-                <View style={styles.profileCard}>
-                    <UserIcon size={40} color={theme.colors.text} style={{ marginRight: theme.spacing.md }} />
-                    <View style={styles.profileInfo}>
-                        <Text style={styles.profileLabel}>Nickname</Text>
-                        <Text style={styles.profileValue}>{nickname}</Text>
-                    </View>
-                </View>
-            </View>
-
-            {/* Privacy Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Privacy</Text>
-
-                <View style={styles.menuItem}>
-                    <View style={styles.menuItemLeft}>
-                        <Text style={styles.menuItemText}>Share Activity</Text>
-                        <Text style={styles.menuItemSubtext}>
-                            {isSharingEnabled
-                                ? 'Friends can see your sessions'
-                                : 'Your activity is private'}
-                        </Text>
-                    </View>
-                    <Switch
-                        value={isSharingEnabled}
-                        onValueChange={handleToggleSharing}
-                        trackColor={{
-                            false: theme.colors.border,
-                            true: theme.colors.primary,
-                        }}
-                        thumbColor={theme.colors.text}
-                    />
+        // 2. WRAPPER PRINCIPALE
+        <ScreenContainer>
+            {/* 3. ScrollView Interna */}
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+            >
+                <View style={styles.header}>
+                    <SettingsIcon size={60} color={theme.colors.text} style={{ marginBottom: theme.spacing.sm }} />
+                    <Text style={styles.headerTitle}>Settings</Text>
                 </View>
 
-                {!isSharingEnabled && (
-                    <View style={styles.warningBox}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                            <AlertTriangle size={16} color={theme.colors.text} />
-                            <Text style={styles.warningText}>
-                                Your activity feed is disabled while sharing is off
-                            </Text>
+                {/* Profile Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Profile</Text>
+
+                    <View style={styles.profileCard}>
+                        <UserIcon size={40} color={theme.colors.text} style={{ marginRight: theme.spacing.md }} />
+                        <View style={styles.profileInfo}>
+                            <Text style={styles.profileLabel}>Nickname</Text>
+                            <Text style={styles.profileValue}>{nickname}</Text>
                         </View>
                     </View>
-                )}
-            </View>
-
-            {/* Friends Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Friends ({friends.length})</Text>
-
-                <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => setFriendsOverlayVisible(true)}
-                >
-                    <Text style={styles.menuItemText}>Manage Friends</Text>
-                    <ChevronRight size={24} color={theme.colors.primary} />
-                </TouchableOpacity>
-
-                {friends.length > 0 && (
-                    <View style={styles.friendsList}>
-                        {friends.slice(0, 3).map((friend) => (
-                            <View key={friend.id} style={styles.friendItem}>
-                                <View style={styles.friendItemLeft}>
-                                    <UserIcon size={20} color={theme.colors.text} style={{ marginRight: theme.spacing.sm }} />
-                                    <Text style={styles.friendNickname}>{friend.nickname}</Text>
-                                </View>
-                                <TouchableOpacity
-                                    onPress={() => handleRemoveFriend(friend.id, friend.nickname)}
-                                >
-                                    <Text style={styles.removeText}>Remove</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                        {friends.length > 3 && (
-                            <TouchableOpacity
-                                style={styles.viewAllButton}
-                                onPress={() => setFriendsOverlayVisible(true)}
-                            >
-                                <Text style={styles.viewAllText}>
-                                    View all {friends.length} friends →
-                                </Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                )}
-            </View>
-
-            {/* About Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>About</Text>
-
-                <View style={styles.infoCard}>
-                    <Text style={styles.infoText}>
-                        Friendspo - Track your bathroom habits and compete with friends!
-                    </Text>
-                    <Text style={styles.versionText}>Version 1.0.0</Text>
                 </View>
-            </View>
 
-            {/* Account Section */}
-            <View style={styles.section}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
-                    <Text style={styles.sectionTitle}>Account</Text>
-                    {!hasPassword && (
-                        <View style={styles.guestBadge}>
-                            <Text style={styles.guestBadgeText}>👤 Guest</Text>
+                {/* Privacy Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Privacy</Text>
+
+                    <View style={styles.menuItem}>
+                        <View style={styles.menuItemLeft}>
+                            <Text style={styles.menuItemText}>Share Activity</Text>
+                            <Text style={styles.menuItemSubtext}>
+                                {isSharingEnabled
+                                    ? 'Friends can see your sessions'
+                                    : 'Your activity is private'}
+                            </Text>
+                        </View>
+                        <Switch
+                            value={isSharingEnabled}
+                            onValueChange={handleToggleSharing}
+                            trackColor={{
+                                false: theme.colors.border,
+                                true: theme.colors.primary,
+                            }}
+                            thumbColor={theme.colors.text}
+                        />
+                    </View>
+
+                    {!isSharingEnabled && (
+                        <View style={styles.warningBox}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                <AlertTriangle size={16} color={theme.colors.text} />
+                                <Text style={styles.warningText}>
+                                    Your activity feed is disabled while sharing is off
+                                </Text>
+                            </View>
                         </View>
                     )}
                 </View>
 
-                {/* Guest Warning */}
-                {!hasPassword && (
-                    <View style={styles.warningBox}>
-                        <Text style={styles.warningText}>
-                            ⚠️ Your data will be lost when you log out. Create an account to save your progress!
+                {/* Friends Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Friends ({friends.length})</Text>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => setFriendsOverlayVisible(true)}
+                    >
+                        <Text style={styles.menuItemText}>Manage Friends</Text>
+                        <ChevronRight size={24} color={theme.colors.primary} />
+                    </TouchableOpacity>
+
+                    {friends.length > 0 && (
+                        <View style={styles.friendsList}>
+                            {friends.slice(0, 3).map((friend) => (
+                                <View key={friend.id} style={styles.friendItem}>
+                                    <View style={styles.friendItemLeft}>
+                                        <UserIcon size={20} color={theme.colors.text} style={{ marginRight: theme.spacing.sm }} />
+                                        <Text style={styles.friendNickname}>{friend.nickname}</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => handleRemoveFriend(friend.id, friend.nickname)}
+                                    >
+                                        <Text style={styles.removeText}>Remove</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                            {friends.length > 3 && (
+                                <TouchableOpacity
+                                    style={styles.viewAllButton}
+                                    onPress={() => setFriendsOverlayVisible(true)}
+                                >
+                                    <Text style={styles.viewAllText}>
+                                        View all {friends.length} friends →
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+                </View>
+
+                {/* About Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>About</Text>
+
+                    <View style={styles.infoCard}>
+                        <Text style={styles.infoText}>
+                            Friendspo - Track your bathroom habits and compete with friends!
                         </Text>
-                    </View>
-                )}
-
-                {/* Email Display */}
-                <View style={styles.accountInfoCard}>
-                    <View style={styles.accountInfoRow}>
-                        <Mail size={20} color={theme.colors.textSecondary} />
-                        <View style={styles.accountInfoContent}>
-                            <Text style={styles.accountInfoLabel}>Email</Text>
-                            <Text style={styles.accountInfoValue}>
-                                {accountInfo?.email || 'Not set'}
-                            </Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.accountInfoRow}>
-                        <Key size={20} color={theme.colors.textSecondary} />
-                        <View style={styles.accountInfoContent}>
-                            <Text style={styles.accountInfoLabel}>Password</Text>
-                            <Text style={styles.accountInfoValue}>
-                                {hasPassword ? '••••••••' : 'Not set'}
-                            </Text>
-                        </View>
-                        {hasPassword && (
-                            <TouchableOpacity onPress={() => setChangePasswordModalVisible(true)}>
-                                <Text style={styles.changeLink}>Change</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <View style={styles.accountInfoRow}>
-                        <UserIcon size={20} color={theme.colors.textSecondary} />
-                        <View style={styles.accountInfoContent}>
-                            <Text style={styles.accountInfoLabel}>Nickname</Text>
-                            <Text style={styles.accountInfoValue}>{accountInfo?.nickname || nickname}</Text>
-                        </View>
-                        {accountInfo?.canChangeNickname ? (
-                            <TouchableOpacity onPress={() => setChangeNicknameModalVisible(true)}>
-                                <Text style={styles.changeLink}>Change</Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <Text style={styles.cooldownText}>Wait 7 days</Text>
-                        )}
+                        <Text style={styles.versionText}>Version 1.0.0</Text>
                     </View>
                 </View>
 
-                {/* Create Account Button - only for guest users */}
-                {!hasPassword && (
-                    <TouchableOpacity
-                        style={styles.secureButton}
-                        onPress={() => setAccountModalVisible(true)}
-                    >
-                        <Lock size={20} color={theme.colors.text} />
-                        <Text style={styles.secureButtonText}>Create Account</Text>
+                {/* Account Section */}
+                <View style={styles.section}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+                        <Text style={styles.sectionTitle}>Account</Text>
+                        {!hasPassword && (
+                            <View style={styles.guestBadge}>
+                                <Text style={styles.guestBadgeText}>👤 Guest</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Guest Warning */}
+                    {!hasPassword && (
+                        <View style={styles.warningBox}>
+                            <Text style={styles.warningText}>
+                                ⚠️ Your data will be lost when you log out. Create an account to save your progress!
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Email Display */}
+                    <View style={styles.accountInfoCard}>
+                        <View style={styles.accountInfoRow}>
+                            <Mail size={20} color={theme.colors.textSecondary} />
+                            <View style={styles.accountInfoContent}>
+                                <Text style={styles.accountInfoLabel}>Email</Text>
+                                <Text style={styles.accountInfoValue}>
+                                    {accountInfo?.email || 'Not set'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.accountInfoRow}>
+                            <Key size={20} color={theme.colors.textSecondary} />
+                            <View style={styles.accountInfoContent}>
+                                <Text style={styles.accountInfoLabel}>Password</Text>
+                                <Text style={styles.accountInfoValue}>
+                                    {hasPassword ? '••••••••' : 'Not set'}
+                                </Text>
+                            </View>
+                            {hasPassword && (
+                                <TouchableOpacity onPress={() => setChangePasswordModalVisible(true)}>
+                                    <Text style={styles.changeLink}>Change</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        <View style={styles.accountInfoRow}>
+                            <UserIcon size={20} color={theme.colors.textSecondary} />
+                            <View style={styles.accountInfoContent}>
+                                <Text style={styles.accountInfoLabel}>Nickname</Text>
+                                <Text style={styles.accountInfoValue}>{accountInfo?.nickname || nickname}</Text>
+                            </View>
+                            {accountInfo?.canChangeNickname ? (
+                                <TouchableOpacity onPress={() => setChangeNicknameModalVisible(true)}>
+                                    <Text style={styles.changeLink}>Change</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <Text style={styles.cooldownText}>Wait 7 days</Text>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* Create Account Button - only for guest users */}
+                    {!hasPassword && (
+                        <TouchableOpacity
+                            style={styles.secureButton}
+                            onPress={() => setAccountModalVisible(true)}
+                        >
+                            <Lock size={20} color={theme.colors.text} />
+                            <Text style={styles.secureButtonText}>Create Account</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Danger Zone */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Danger Zone</Text>
+
+                    <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteProfile}>
+                        <Text style={styles.dangerButtonText}>Delete Profile</Text>
                     </TouchableOpacity>
-                )}
-            </View>
+                </View>
 
-            {/* Danger Zone */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Danger Zone</Text>
-
-                <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteProfile}>
-                    <Text style={styles.dangerButtonText}>Delete Profile</Text>
+                {/* Logout Button */}
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Text style={styles.logoutButtonText}>Logout</Text>
                 </TouchableOpacity>
-            </View>
 
-            {/* Logout Button */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>Made with 💩 and ❤️</Text>
+                </View>
+            </ScrollView>
 
-            <View style={styles.footer}>
-                <Text style={styles.footerText}>Made with 💩 and ❤️</Text>
-            </View>
-
+            {/* Modals e Overlays rimangono qui, fuori dalla ScrollView ma dentro il Container */}
             <FriendsOverlay
                 visible={friendsOverlayVisible}
                 userId={userId}
@@ -844,15 +841,19 @@ export default function SettingsScreen({
                     </View>
                 </View>
             </Modal>
-        </ScrollView>
+        </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    // 4. Stile ScrollView e contentContainer
+    scrollView: {
         flex: 1,
-        backgroundColor: theme.colors.background,
     },
+    scrollContent: {
+        paddingBottom: theme.spacing.xxl * 2, // Spazio extra per il footer
+    },
+    // Rimosso 'container' perché gestito da ScreenContainer
     header: {
         alignItems: 'center',
         padding: theme.spacing.xl,

@@ -11,6 +11,8 @@ import { theme } from '../styles/theme';
 import { statsService, Stats } from '../services/statsService';
 import CalendarView from '../components/CalendarView';
 import { Flame, TrendingUp, BarChart2, Calendar, Timer, Activity, Users, Medal, Zap } from 'lucide-react-native';
+// 1. IMPORTA IL WRAPPER
+import { ScreenContainer } from '../components/ScreenContainer';
 
 interface StatsScreenProps {
     userId: string;
@@ -105,7 +107,8 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
     };
 
     return (
-        <View style={styles.container}>
+        // 2. SOSTITUISCI VIEW CON SCREENCONTAINER
+        <ScreenContainer>
             {/* Toggle Buttons */}
             <View style={styles.toggleContainer}>
                 <TouchableOpacity
@@ -145,6 +148,8 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
 
             <ScrollView
                 style={styles.scrollView}
+                // 3. Importante: contentContainerStyle per il padding finale
+                contentContainerStyle={styles.scrollContent}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }
@@ -330,15 +335,11 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
                     </>
                 )}
             </ScrollView>
-        </View>
+        </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.colors.background,
-    },
     toggleContainer: {
         flexDirection: 'row',
         backgroundColor: theme.colors.surface,
@@ -365,6 +366,10 @@ const styles = StyleSheet.create({
     },
     scrollView: {
         flex: 1,
+    },
+    // NUOVO STILE: Assicura che l'ultima card non sia coperta dalla tab bar
+    scrollContent: {
+        paddingBottom: theme.spacing.xxl * 2, // Abbondante spazio sotto
     },
     streakCard: {
         backgroundColor: theme.colors.primary,

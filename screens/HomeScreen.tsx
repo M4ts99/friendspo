@@ -18,6 +18,9 @@ import StatsHeader from '../components/StatsHeader';
 import FriendsOverlay from '../components/FriendsOverlay';
 import SessionCompletionModal from '../components/SessionCompletionModal';
 
+// 1. IMPORTA IL WRAPPER
+import { ScreenContainer } from '../components/ScreenContainer';
+
 interface HomeScreenProps {
     userId: string;
 }
@@ -84,7 +87,7 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                     Animated.timing(bgAnim, {
                         toValue: 1,
                         duration: 3000,
-                        useNativeDriver: true, // color interpolation/opacity on views usually supports native driver but let's be safe with layout
+                        useNativeDriver: true, 
                     }),
                     Animated.timing(bgAnim, {
                         toValue: 0,
@@ -138,7 +141,7 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
             const session = await sessionService.startSession(userId);
             setActiveSession(session);
             setElapsedTime(0);
-            setLastCompletedSession(null); // Clear previous session info
+            setLastCompletedSession(null); 
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to start session');
         }
@@ -157,7 +160,6 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
 
             await sessionService.stopSession(activeSession.id, message, rating);
 
-            // Save completed session info for display
             setLastCompletedSession({
                 startTime: sessionStartTime,
                 duration: sessionDuration,
@@ -167,7 +169,6 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
             setElapsedTime(0);
             setCompletionModalVisible(false);
 
-            // Reload stats after session completes
             loadStats();
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to save session');
@@ -193,7 +194,8 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
     };
 
     return (
-        <View style={styles.container}>
+        // 2. WRAPPER SCREEN CONTAINER
+        <ScreenContainer>
             <StatsHeader
                 streak={streak}
                 avgDuration={avgDuration}
@@ -323,15 +325,12 @@ export default function HomeScreen({ userId }: HomeScreenProps) {
                 onDelete={handleDelete}
                 onClose={() => setCompletionModalVisible(false)}
             />
-        </View>
+        </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.colors.background,
-    },
+    // Rimosso 'container' principale perché gestito dal wrapper
     gradient: {
         flex: 1,
     },
@@ -383,10 +382,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         minWidth: 250,
     },
-    startButtonEmoji: {
-        fontSize: 60,
-        marginBottom: theme.spacing.sm,
-    },
     buttonText: {
         fontSize: theme.fontSize.xl,
         color: theme.colors.text,
@@ -419,11 +414,6 @@ const styles = StyleSheet.create({
     },
     closeButton: {
         padding: theme.spacing.xs,
-    },
-    closeButtonText: {
-        fontSize: theme.fontSize.lg,
-        color: theme.colors.textSecondary,
-        fontWeight: theme.fontWeight.bold,
     },
     savedSessionRow: {
         flexDirection: 'row',

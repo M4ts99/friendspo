@@ -17,6 +17,9 @@ import { leagueService, League, LeagueMemberStats } from '../services/leagueServ
 import { Trophy, Plus, Users, Crown, ChevronRight, Search, Copy } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 
+// 1. IMPORTA IL WRAPPER
+import { ScreenContainer } from '../components/ScreenContainer';
+
 interface LeagueScreenProps {
     userId: string;
 }
@@ -29,7 +32,7 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
     // Modals state
     const [createModalVisible, setCreateModalVisible] = useState(false);
     const [joinModalVisible, setJoinModalVisible] = useState(false);
-    const [activeLeague, setActiveLeague] = useState<League | null>(null); // Se not null, mostra la leaderboard
+    const [activeLeague, setActiveLeague] = useState<League | null>(null);
     
     // Form state
     const [newLeagueName, setNewLeagueName] = useState('');
@@ -144,7 +147,8 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
     };
 
     return (
-        <View style={styles.container}>
+        // 2. USO DEL WRAPPER
+        <ScreenContainer>
             {/* Header */}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Leagues 🏆</Text>
@@ -269,16 +273,13 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        paddingTop: 60,
-    },
+    // Ho rimosso 'container' perché ScreenContainer gestisce già padding e background
+    
     header: {
         paddingHorizontal: theme.spacing.lg,
         marginBottom: theme.spacing.lg,
@@ -314,7 +315,8 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingHorizontal: theme.spacing.lg,
-        paddingBottom: 40,
+        // 3. Padding extra per la Bottom Tab Bar
+        paddingBottom: theme.spacing.xxl * 2,
     },
     leagueCard: {
         flexDirection: 'row',

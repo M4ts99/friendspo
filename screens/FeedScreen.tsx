@@ -17,6 +17,11 @@ import { SessionWithUser } from '../services/supabase';
 import FriendsOverlay from '../components/FriendsOverlay';
 import StarRating from '../components/StarRating';
 import { User, Lock, Users, Coffee } from 'lucide-react-native';
+import { usePushNotifications } from '../hooks/usePushNotification';
+
+// 1. IMPORTA IL COMPONENTE WRAPPER
+// Se non hai creato il file separato, fammelo sapere e ti do la versione senza import
+import { ScreenContainer } from '../components/ScreenContainer';
 
 interface FeedScreenProps {
     userId: string;
@@ -30,7 +35,8 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
     const [hasFriends, setHasFriends] = useState(false);
     const [friendsOverlayVisible, setFriendsOverlayVisible] = useState(false);
 
-    // Reload settings when screen gains focus (catches privacy changes)
+    usePushNotifications(userId);
+
     useFocusEffect(
         React.useCallback(() => {
             loadUserSettings();
@@ -40,10 +46,7 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
     useEffect(() => {
         loadUserSettings();
         loadFeed();
-
-        // Set up real-time subscription (optional enhancement)
-        const interval = setInterval(loadFeed, 10000); // Refresh every 10 seconds
-
+        const interval = setInterval(loadFeed, 10000);
         return () => clearInterval(interval);
     }, [userId]);
 
@@ -53,7 +56,6 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
             if (user) {
                 setIsSharingEnabled(user.is_sharing_enabled);
             }
-
             const friends = await friendService.getFriends(userId);
             setHasFriends(friends.length > 0);
         } catch (error) {
@@ -79,7 +81,7 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
     };
 
     const renderFeedItem = ({ item }: { item: SessionWithUser }) => {
-        const duration = Math.floor(item.duration / 60); // Convert to minutes
+        const duration = Math.floor(item.duration / 60);
         const timeAgo = statsService.formatTimeAgo(item.started_at);
 
         return (
@@ -156,7 +158,9 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
     };
 
     return (
-        <View style={styles.container}>
+        // 2. SOSTITUZIONE VIEW CON SCREENCONTAINER
+        // Questo gestisce automaticamente notch, isola dinamica e status bar
+        <ScreenContainer>
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Activity Feed</Text>
                 <Text style={styles.headerSubtitle}>See what your friends are up to</Text>
@@ -179,20 +183,21 @@ export default function FeedScreen({ userId }: FeedScreenProps) {
                 onClose={() => setFriendsOverlayVisible(false)}
                 onRequestsUpdated={loadUserSettings}
             />
-        </View>
+        </ScreenContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.colors.background,
-    },
+    // 3. Nota: Ho rimosso 'container' perché ScreenContainer gestisce già flex:1 e background
+    // Se vuoi puoi lasciarlo vuoto o rimuovere del tutto questo stile.
+    
     header: {
         padding: theme.spacing.lg,
         backgroundColor: theme.colors.surface,
         borderBottomWidth: 1,
         borderBottomColor: theme.colors.border,
+        // Non serve paddingTop extra qui, perché ScreenContainer
+        // spinge già giù il contenuto sotto la notch
     },
     headerTitle: {
         fontSize: theme.fontSize.xl,
@@ -206,6 +211,9 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: theme.spacing.lg,
+        // Aggiungiamo un po' di padding extra in basso per non far
+        // finire l'ultimo elemento proprio attaccato alla barra di navigazione
+        paddingBottom: theme.spacing.xxl, 
     },
     feedItem: {
         flexDirection: 'row',
@@ -224,9 +232,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: theme.spacing.md,
-    },
-    feedEmoji: {
-        fontSize: 24,
     },
     feedContent: {
         flex: 1,
