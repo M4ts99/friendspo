@@ -9,16 +9,21 @@ import {
     Modal,
     Alert,
     ActivityIndicator,
-    RefreshControl
+    RefreshControl,
+    Platform, 
+    KeyboardAvoidingView
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../styles/theme';
 import { leagueService, League, LeagueMemberStats } from '../services/leagueService';
-import { Trophy, Plus, Users, Crown, ChevronRight, Search, Copy } from 'lucide-react-native';
+import { Trophy, Plus, Users, Crown, ChevronRight, Search, Copy, UserPlus, X, UserCheck, LogOut } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 
 // 1. IMPORTA IL WRAPPER
 import { ScreenContainer } from '../components/ScreenContainer';
+import { supabase } from '../services/supabase';
+import { sendFriendRequestNotification } from '../services/notificationService';
+import { friendService } from '../services/friendService';
 
 interface LeagueScreenProps {
     userId: string;
@@ -42,17 +47,38 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
     const [leaderboard, setLeaderboard] = useState<LeagueMemberStats[]>([]);
     const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
+    // Stati per il Popup Utente
+    const [userModalVisible, setUserModalVisible] = useState(false);
+    const [selectedMember, setSelectedMember] = useState<LeagueMemberStats | null>(null);
+    const [sendingRequest, setSendingRequest] = useState(false);
+    const [myNickname, setMyNickname] = useState('');
+    const [myFriendIds, setMyFriendIds] = useState<string[]>([]);
+
     useEffect(() => {
-        loadLeagues();
+        loadData();
     }, []);
 
-    const loadLeagues = async () => {
+    const loadData = async () => {
         try {
-            const data = await leagueService.getMyLeagues(userId);
-            setLeagues(data);
+            // Eseguiamo tutte le chiamate in parallelo: molto più veloce
+            const [leaguesData, friendsData, myProfileData] = await Promise.all([
+                leagueService.getMyLeagues(userId),       // 1. Le tue leghe
+                friendService.getFriends(userId),         // 2. I tuoi amici (per vedere se sei già amico)
+                supabase.from('users').select('nickname').eq('id', userId).single() // 3. Il tuo nickname (per le notifiche)
+            ]);
+
+            // Aggiorniamo gli stati
+            setLeagues(leaguesData);
+            setMyFriendIds(friendsData.map(f => f.id)); // Salviamo solo gli ID per controllo rapido
+            
+            if (myProfileData.data) {
+                setMyNickname(myProfileData.data.nickname);
+            }
+
         } catch (error) {
             console.error(error);
         } finally {
+            // Spegniamo tutti i caricamenti
             setLoading(false);
             setRefreshing(false);
         }
@@ -64,7 +90,7 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
             await leagueService.createLeague(newLeagueName, '', userId);
             setCreateModalVisible(false);
             setNewLeagueName('');
-            loadLeagues();
+            loadData();
             Alert.alert('Success', 'League created successfully!');
         } catch (error: any) {
             Alert.alert('Error', error.message);
@@ -77,7 +103,7 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
             await leagueService.joinLeagueByCode(joinCode.trim(), userId);
             setJoinModalVisible(false);
             setJoinCode('');
-            loadLeagues();
+            loadData();
             Alert.alert('Success', 'You joined the league!');
         } catch (error: any) {
             Alert.alert('Error', error.message);
@@ -128,7 +154,11 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
         const isMe = item.userId === userId;
 
         return (
-            <View style={[styles.leaderboardRow, isMe && styles.myRow]}>
+            <TouchableOpacity style={[styles.leaderboardRow, isMe && styles.myRow]}
+                onPress={() => onMemberPress(item)}
+                disabled={isMe}
+                activeOpacity={0.7}
+            >
                 <View style={styles.rankContainer}>{rankIcon}</View>
                 <View style={{ flex: 1 }}>
                     <Text style={[styles.memberName, isMe && styles.myName]}>
@@ -142,8 +172,118 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
                     <Text style={styles.scoreText}>{item.totalSessions}</Text>
                     <Text style={styles.scoreLabel}>sessions</Text>
                 </View>
-            </View>
+            </TouchableOpacity>
         );
+    };
+
+    // Apre il popup quando clicchi su un membro
+    const onMemberPress = (member: LeagueMemberStats) => {
+        console.log("Toccato utente:", member.nickname);
+        if (member.userId === userId) return; // Non cliccare su se stessi
+        setSelectedMember(member);
+        setUserModalVisible(true);
+    };
+
+    // Gestisce l'invio della richiesta e della notifica
+    const handleSendFriendRequest = async () => {
+        if (!selectedMember) return;
+        
+        setSendingRequest(true);
+        try {
+            // 1. Invia richiesta al DB
+            await friendService.sendFriendRequestById(userId, selectedMember.userId);
+
+            // 2. Cerca il token dell'utente per la notifica push
+            const { data: targetUser } = await supabase
+                .from('users')
+                .select('expo_push_token')
+                .eq('id', selectedMember.userId)
+                .single();
+
+            // 3. Invia notifica se il token esiste
+            if (targetUser?.expo_push_token) {
+                const senderName = myNickname || "A new friend";
+                await sendFriendRequestNotification(targetUser.expo_push_token, senderName);
+            }
+
+            Alert.alert('Success', `Friend request sent to ${selectedMember.nickname}!`);
+            setUserModalVisible(false); // Chiudi popup
+        } catch (error: any) {
+            Alert.alert('Notice', error.message);
+        } finally {
+            setSendingRequest(false);
+        }
+    };
+
+    const handleLeaveLeague = async () => {
+        if (!activeLeague) return;
+
+        // --- VERSIONE WEB (Computer) ---
+        if (Platform.OS === 'web') {
+            const confirm = window.confirm(`Are you sure you want to leave "${activeLeague.name}"?`);
+            if (confirm) {
+                await performLeave(); // Chiama la logica di uscita
+            }
+            return;
+        }
+
+        // --- VERSIONE MOBILE (iPad/Android) ---
+        Alert.alert(
+            "Leave League",
+            `Are you sure you want to leave "${activeLeague.name}"?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Leave",
+                    style: "destructive",
+                    onPress: performLeave // Chiama la logica di uscita
+                }
+            ]
+        );
+    };
+
+    // Funzione separata per evitare di duplicare il codice
+    const performLeave = async () => {
+        try {
+            setLoading(true);
+            await leagueService.leaveLeague(activeLeague!.id, userId);
+            setActiveLeague(null); // Chiude il modale
+            loadData(); // Aggiorna la lista
+            
+            // Feedback diverso per Web e Mobile
+            if (Platform.OS === 'web') {
+                window.alert("You have left the league.");
+            } else {
+                Alert.alert("Left", "You have left the league.");
+            }
+        } catch (error: any) {
+            if (Platform.OS === 'web') {
+                window.alert(error.message);
+            } else {
+                Alert.alert("Error", error.message);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Funzione per formattare automaticamente il codice (XXXX-XXXX)
+    const handleCodeChange = (text: string) => {
+        // 1. Rimuovi tutto ciò che non è alfanumerico e converti in maiuscolo
+        let cleaned = text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+        // 2. Limita a 8 caratteri (senza contare il trattino)
+        if (cleaned.length > 8) {
+            cleaned = cleaned.substring(0, 8);
+        }
+
+        // 3. Inserisci il trattino dopo il 4° carattere se necessario
+        let formatted = cleaned;
+        if (cleaned.length > 4) {
+            formatted = cleaned.substring(0, 4) + '-' + cleaned.substring(4);
+        }
+
+        setJoinCode(formatted);
     };
 
     return (
@@ -183,7 +323,13 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
                     renderItem={renderLeagueItem}
                     keyExtractor={item => item.id}
                     contentContainerStyle={styles.listContent}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadLeagues(); }} tintColor={theme.colors.primary}/>}
+                    refreshControl={
+                        <RefreshControl 
+                            refreshing={refreshing} 
+                            onRefresh={() => { setRefreshing(true); loadData(); }} 
+                            tintColor={theme.colors.primary}
+                        />
+                    }
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
                             <Text style={styles.emptyText}>You are not in any league yet.</Text>
@@ -193,12 +339,14 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
                 />
             )}
 
-            {/* --- MODAL: LEADERBOARD --- */}
+            {/* --- MODAL: LEADERBOARD (GENITORE) --- */}
             <Modal visible={!!activeLeague} animationType="slide" presentationStyle="pageSheet">
                 <View style={styles.modalContainer}>
+                    {/* Header Classifica */}
                     <View style={styles.modalHeader}>
-                        <View>
-                            <Text style={styles.modalTitle}>{activeLeague?.name}</Text>
+                        {/* Parte Sinistra: Titolo e Codice */}
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.modalTitle} numberOfLines={1}>{activeLeague?.name}</Text>
                             <TouchableOpacity 
                                 style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
                                 onPress={() => activeLeague && copyToClipboard(activeLeague.code)}
@@ -207,11 +355,25 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
                                 <Copy size={14} color={theme.colors.primary} style={{ marginLeft: 6 }}/>
                             </TouchableOpacity>
                         </View>
-                        <TouchableOpacity onPress={() => setActiveLeague(null)} style={styles.closeButton}>
-                            <Text style={styles.closeButtonText}>Close</Text>
-                        </TouchableOpacity>
+
+                        {/* Parte Destra: Bottoni Azione */}
+                        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                            {/* Bottone ESCI (Rosso) */}
+                            <TouchableOpacity 
+                                onPress={handleLeaveLeague} 
+                                style={[styles.closeButton, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]} // Sfondo rosso chiaro
+                            >
+                                <LogOut size={20} color={theme.colors.danger || '#FF3B30'} />
+                            </TouchableOpacity>
+
+                            {/* Bottone CHIUDI (X) */}
+                            <TouchableOpacity onPress={() => setActiveLeague(null)} style={styles.closeButton}>
+                                <X size={20} color={theme.colors.text} />
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
+                    {/* Lista Classifica */}
                     {loadingLeaderboard ? (
                         <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 40 }} />
                     ) : (
@@ -222,56 +384,150 @@ export default function LeagueScreen({ userId }: LeagueScreenProps) {
                             contentContainerStyle={styles.listContent}
                         />
                     )}
+
+                    {/* --- MODAL: USER PROFILE & ADD FRIEND (NIDIFICATO QUI) --- */}
+                    <Modal 
+                        visible={userModalVisible} 
+                        transparent={true}
+                        animationType="fade"
+                        presentationStyle='overFullScreen'
+                        onRequestClose={() => setUserModalVisible(false)}
+                        statusBarTranslucent={true}
+                    >
+                        <View style={styles.dialogOverlay}>
+                            <View style={styles.userPopupBox}>
+                                {/* Header Popup */}
+                                <View style={styles.popupHeader}>
+                                    <Text style={styles.popupTitle}>Member Profile</Text>
+                                    <TouchableOpacity onPress={() => setUserModalVisible(false)}>
+                                        <X color={theme.colors.textSecondary} size={24} />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Avatar e Info */}
+                                <View style={styles.userInfoContainer}>
+                                    <View style={styles.avatarPlaceholder}>
+                                        <Text style={styles.avatarText}>
+                                            {selectedMember?.nickname.substring(0, 2).toUpperCase()}
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.userPopupName}>{selectedMember?.nickname}</Text>
+                                    <Text style={styles.userPopupStats}>
+                                        {selectedMember?.totalSessions} Sessions • {selectedMember?.totalDuration} Mins
+                                    </Text>
+                                </View>
+
+                                {/* Bottone Azione */}
+                                {(() => {
+                                    // Controllo sicuro che restituisce sempre true o false
+                                    const isAlreadyFriend = selectedMember 
+                                        ? myFriendIds.includes(selectedMember.userId) 
+                                        : false;
+
+                                    return (
+                                        <TouchableOpacity 
+                                            style={[
+                                                styles.friendRequestButton, 
+                                                isAlreadyFriend && styles.friendRequestButtonDisabled
+                                            ]}
+                                            onPress={handleSendFriendRequest}
+                                            disabled={sendingRequest || isAlreadyFriend}
+                                        >
+                                            {sendingRequest ? (
+                                                <ActivityIndicator color={theme.colors.background} />
+                                            ) : isAlreadyFriend ? (
+                                                <>
+                                                    <UserCheck color={theme.colors.textSecondary} size={20} />
+                                                    <Text style={styles.friendRequestButtonTextDisabled}>
+                                                        You are friends
+                                                    </Text>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <UserPlus color={theme.colors.background} size={20} />
+                                                    <Text style={styles.friendRequestButtonText}>
+                                                        Send Friend Request
+                                                    </Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })()}
+                            </View>
+                        </View>
+                    </Modal>
+                    {/* --- FINE MODAL NIDIFICATO --- */}
+
                 </View>
             </Modal>
 
             {/* --- MODAL: CREATE LEAGUE --- */}
             <Modal visible={createModalVisible} transparent animationType="fade">
-                <View style={styles.dialogOverlay}>
-                    <View style={styles.dialogBox}>
-                        <Text style={styles.dialogTitle}>Create New League</Text>
-                        <TextInput 
-                            style={styles.input} 
-                            placeholder="League Name (e.g. Office Poopers)" 
-                            placeholderTextColor={theme.colors.textTertiary}
-                            value={newLeagueName}
-                            onChangeText={setNewLeagueName}
-                        />
-                        <View style={styles.dialogButtons}>
-                            <TouchableOpacity onPress={() => setCreateModalVisible(false)} style={styles.dialogButtonCancel}>
-                                <Text style={styles.dialogButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleCreateLeague} style={styles.dialogButtonConfirm}>
-                                <Text style={[styles.dialogButtonText, { color: theme.colors.background }]}>Create</Text>
-                            </TouchableOpacity>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.dialogOverlay}>
+                        <View style={styles.dialogBox}>
+                            <Text style={styles.dialogTitle}>Create New League</Text>
+                            <Text style={styles.dialogSubtitle}>Give your league a cool name!</Text>
+                            
+                            <TextInput 
+                                style={styles.input} 
+                                placeholder="Name (e.g. Office Poopers)" 
+                                placeholderTextColor={theme.colors.textTertiary}
+                                value={newLeagueName}
+                                onChangeText={setNewLeagueName}
+                                autoCorrect={false}
+                            />
+                            
+                            <View style={styles.dialogButtons}>
+                                <TouchableOpacity onPress={() => setCreateModalVisible(false)} style={styles.dialogButtonCancel}>
+                                    <Text style={styles.dialogButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={handleCreateLeague} style={styles.dialogButtonConfirm}>
+                                    <Text style={[styles.dialogButtonText, { color: theme.colors.background }]}>Create</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* --- MODAL: JOIN LEAGUE --- */}
             <Modal visible={joinModalVisible} transparent animationType="fade">
-                <View style={styles.dialogOverlay}>
-                    <View style={styles.dialogBox}>
-                        <Text style={styles.dialogTitle}>Join a League</Text>
-                        <TextInput 
-                            style={styles.input} 
-                            placeholder="Enter Code (e.g. PIZZA-1234)" 
-                            placeholderTextColor={theme.colors.textTertiary}
-                            value={joinCode}
-                            onChangeText={setJoinCode}
-                            autoCapitalize="characters"
-                        />
-                        <View style={styles.dialogButtons}>
-                            <TouchableOpacity onPress={() => setJoinModalVisible(false)} style={styles.dialogButtonCancel}>
-                                <Text style={styles.dialogButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleJoinLeague} style={styles.dialogButtonConfirm}>
-                                <Text style={[styles.dialogButtonText, { color: theme.colors.background }]}>Join</Text>
-                            </TouchableOpacity>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.dialogOverlay}>
+                        <View style={styles.dialogBox}>
+                            <Text style={styles.dialogTitle}>Join a League</Text>
+                            <Text style={styles.dialogSubtitle}>Enter the invite code below.</Text>
+                            
+                            <TextInput 
+                                style={[styles.input, styles.textInputCode]} 
+                                placeholder="XXXX-0000" 
+                                placeholderTextColor={theme.colors.textTertiary}
+                                value={joinCode}
+                                onChangeText={handleCodeChange}
+                                autoCapitalize="characters"
+                                autoCorrect={false}
+                                maxLength={9}
+                                keyboardType="ascii-capable"
+                            />
+                            
+                            <View style={styles.dialogButtons}>
+                                <TouchableOpacity onPress={() => setJoinModalVisible(false)} style={styles.dialogButtonCancel}>
+                                    <Text style={styles.dialogButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={handleJoinLeague} style={styles.dialogButtonConfirm}>
+                                    <Text style={[styles.dialogButtonText, { color: theme.colors.background }]}>Join</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </ScreenContainer>
     );
@@ -368,7 +624,7 @@ const styles = StyleSheet.create({
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         padding: theme.spacing.lg,
         borderBottomWidth: 1,
         borderBottomColor: theme.colors.border,
@@ -387,10 +643,10 @@ const styles = StyleSheet.create({
         padding: 8,
         backgroundColor: 'rgba(255,255,255,0.1)',
         borderRadius: 8,
-    },
-    closeButtonText: {
-        color: theme.colors.text,
-        fontWeight: '600',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 40,
+        height: 40,
     },
     // Leaderboard Rows
     leaderboardRow: {
@@ -436,36 +692,61 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: theme.colors.textSecondary,
         textTransform: 'uppercase',
-    },
-    // Dialog Styles
+    },    
     dialogOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.7)',
         justifyContent: 'center',
-        padding: theme.spacing.xl,
+        alignItems: 'center',
+        padding: theme.spacing.lg,
     },
     dialogBox: {
+        width: '100%',
+        maxWidth: 340,
         backgroundColor: theme.colors.surface,
         borderRadius: theme.borderRadius.xl,
         padding: theme.spacing.xl,
         borderWidth: 1,
         borderColor: theme.colors.border,
+        // Shadow
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
     },
     dialogTitle: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: 'bold',
         color: theme.colors.text,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    dialogSubtitle: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
         marginBottom: theme.spacing.lg,
         textAlign: 'center',
     },
     input: {
+        width: '100%',
         backgroundColor: theme.colors.background,
-        borderRadius: theme.borderRadius.md,
-        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        paddingVertical: 14,
+        paddingHorizontal: theme.spacing.md,
         color: theme.colors.text,
         borderWidth: 1,
         borderColor: theme.colors.border,
-        marginBottom: theme.spacing.lg,
+        marginBottom: theme.spacing.xl,
+        fontSize: 16,
+    },
+    textInputCode: {
+        textAlign: 'center',
+        fontSize: 24,
+        fontWeight: 'bold',
+        letterSpacing: 4,
+        fontVariant: ['tabular-nums'],
+        textTransform: 'uppercase',
     },
     dialogButtons: {
         flexDirection: 'row',
@@ -473,21 +754,114 @@ const styles = StyleSheet.create({
     },
     dialogButtonCancel: {
         flex: 1,
-        padding: theme.spacing.md,
+        paddingVertical: 12,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: theme.colors.border,
-        borderRadius: theme.borderRadius.md,
+        borderRadius: theme.borderRadius.lg,
     },
     dialogButtonConfirm: {
         flex: 1,
-        padding: theme.spacing.md,
+        paddingVertical: 12,
         alignItems: 'center',
         backgroundColor: theme.colors.primary,
-        borderRadius: theme.borderRadius.md,
+        borderRadius: theme.borderRadius.lg,
     },
     dialogButtonText: {
         fontWeight: 'bold',
         color: theme.colors.text,
-    }
+    },
+    
+    // User Popup Styles
+    userPopupBox: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.xl,
+        padding: theme.spacing.lg,
+        width: '85%',
+        maxWidth: 340,
+        alignItems: 'center', 
+        
+        // Ombre per farlo risaltare ("Pop")
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.30,
+        shadowRadius: 4.65,
+        elevation: 8,
+    },
+    popupHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '100%',
+        marginBottom: theme.spacing.lg,
+    },
+    popupTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+    },
+    userInfoContainer: {
+        alignItems: 'center',
+        marginBottom: theme.spacing.xl,
+    },
+    avatarPlaceholder: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)', // Sfondo leggero
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: theme.spacing.md,
+        borderWidth: 2,
+        borderColor: theme.colors.primary,
+    },
+    avatarText: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: theme.colors.primary,
+    },
+    userPopupName: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+        marginBottom: 4,
+    },
+    userPopupStats: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+    },
+    friendRequestButton: {
+        backgroundColor: theme.colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        gap: 8,
+    },
+    friendRequestButtonText: {
+        color: theme.colors.background, // Usa colore scuro per contrasto col primary
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    friendRequestButtonDisabled: {
+        backgroundColor: theme.colors.surface, // O un grigio chiaro/scuro a seconda del tema
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        gap: 8,
+        opacity: 0.8,
+    },
+    friendRequestButtonTextDisabled: {
+        color: theme.colors.textSecondary,
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });

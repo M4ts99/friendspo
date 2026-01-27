@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "8092542234",
+    "project_id": "friendspo-f75ad",
+    "storage_bucket": "friendspo-f75ad.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:8092542234:android:76424f24c3eb1d2c77f8a3",
+        "android_client_info": {
+          "package_name": "com.friendspo.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGNsQvczrSn9sPw9WZOvGP9agFl9Nz-x0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

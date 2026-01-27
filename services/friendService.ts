@@ -115,17 +115,23 @@ export const friendService = {
 
     // Get pending incoming requests (requests sent TO me)
     async getPendingRequests(userId: string): Promise<FriendshipWithUser[]> {
+        console.log("Scaricando richieste per:", userId);
+        
         const { data, error } = await supabase
-            .from('friendships')
-            .select(`
-                *,
-                users!friendships_user_id_fkey (*)
-            `)
-            .eq('friend_id', userId)
-            .eq('status', 'pending');
+        .from('friendships')
+        .select('*, users:user_id(*)') // Scarica TUTTO dall'utente collegato
+        .eq('friend_id', userId)
+        .eq('status', 'pending');
 
-        if (error) throw error;
-        return data || [];
+        if (error) {
+            console.error("Errore fetch richieste:", error);
+            throw error;
+        }
+
+        // LOG DI DEBUG FONDAMENTALE PER CAPIRE COSA ARRIVA AL TELEFONO
+        console.log("Dati grezzi da Supabase (Mobile):", JSON.stringify(data, null, 2));
+
+        return (data as any) || [];
     },
 
     // Get sent pending requests (requests I sent)
@@ -196,5 +202,36 @@ export const friendService = {
 
         if (error) throw error;
         return data?.length || 0;
+    },
+
+    // Nuovo metodo: Invia richiesta direttamente tramite ID (più efficiente per le Leghe)
+    async sendFriendRequestById(userId: string, friendId: string): Promise<void> {
+        // 1. Controlla se sono già amici o se c'è una richiesta pendente
+        const { data: existingFriendship } = await supabase
+            .from('friendships')
+            .select('*')
+            .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`)
+            .maybeSingle();
+
+        if (existingFriendship) {
+            if (existingFriendship.status === 'accepted') {
+                throw new Error('You are already friends');
+            } else {
+                throw new Error('Friend request already sent');
+            }
+        }
+
+        // 2. Crea la richiesta
+        const { error } = await supabase
+            .from('friendships')
+            .insert([
+                {
+                    user_id: userId,
+                    friend_id: friendId,
+                    status: 'pending',
+                },
+            ]);
+
+        if (error) throw error;
     },
 };

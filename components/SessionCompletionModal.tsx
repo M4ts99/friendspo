@@ -1,24 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    Modal,
-    TouchableOpacity,
     StyleSheet,
+    Modal,
     TextInput,
+    TouchableOpacity,
+    KeyboardAvoidingView,
     Platform,
+    ActivityIndicator,
     TouchableWithoutFeedback,
     Keyboard,
-    KeyboardAvoidingView,
+    Alert
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient'; // Reintrodotto per i bottoni
 import { theme } from '../styles/theme';
-import { Plus, Minus, X } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { X } from 'lucide-react-native';
 import StarRating from './StarRating';
 
 interface SessionCompletionModalProps {
     visible: boolean;
-    duration: number; // in seconds
+    duration: number; // in secondi
     startTime: Date;
     onPublish: (message: string, rating: number) => void;
     onDelete: () => void;
@@ -31,53 +33,99 @@ export default function SessionCompletionModal({
     startTime,
     onPublish,
     onDelete,
-    onClose,
+    onClose
 }: SessionCompletionModalProps) {
     const [message, setMessage] = useState('');
-    const [rating, setRating] = useState(5);
+    const [rating, setRating] = useState(0); 
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasRated, setHasRated] = useState(false);
 
-    const formatTime = (seconds: number) => {
+    useEffect(() => {
+        if (visible) {
+            setMessage('');
+            setRating(0);
+            setHasRated(false);
+            setIsSubmitting(false);
+        }
+    }, [visible]);
+
+    const handlePublish = () => {
+        if (!hasRated) {
+            Alert.alert(
+                "Rate Session", 
+                "Please select a rating (even 0) to save the session."
+            );
+            return
+        };         
+        setIsSubmitting(true);
+        onPublish(message, rating); 
+    };
+
+    const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${mins}m ${secs}s`;
     };
 
     const content = (
-        <KeyboardAvoidingView
+        <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.overlay}
         >
-            <View style={styles.dialog}>
+            <View style={styles.container}>
+                {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity
-                        style={styles.closeButton}
-                        onPress={onClose}
-                    >
+                    <Text style={styles.title}>Session Complete! 💩</Text>
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                         <X size={24} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
-                    <Text style={styles.emoji}>🎉</Text>
-                    <Text style={styles.title}>Shit Complete!</Text>
-                    <Text style={styles.subtitle}>
-                        Duration: {formatTime(duration)} • Started: {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
                 </View>
 
-                {/* Rating Section */}
-                <View style={styles.section}>
-                    <Text style={styles.label}>How was it? ({rating}/10)</Text>
-                    <View style={styles.ratingContainer}>
-                        <StarRating
-                            rating={rating}
-                            onRatingChange={setRating}
-                            interactive={true}
-                            size={48}
-                        />
+                {/* Stats Summary */}
+                <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>Time</Text>
+                        <Text style={styles.statValue}>
+                            {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                    </View>
+                    <View style={styles.divider} />
+                    <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>Duration</Text>
+                        <Text style={styles.statValue}>{formatDuration(duration)}</Text>
                     </View>
                 </View>
 
-                {/* Message Section */}
-                <View style={styles.section}>
-                    <Text style={styles.label}>Add a note (optional)</Text>
+                {/* Rating Section (Nuova Logica 2.5/5) */}
+                <View style={styles.ratingSection}>
+                    <Text style={styles.sectionTitle}>How did it go?</Text>
+                    
+                    <StarRating 
+                        rating={rating}
+                        onRatingChange={(newRating) => {
+                                setRating(newRating);
+                                setHasRated(true); // Segna che l'utente ha interagito
+                            }}
+                        interactive={true}
+                        size={42}
+                        color="#FFC107"
+                        emptyColor={theme.colors.border}
+                    />
+
+                    {/* Voto decimale (es. 2.5 / 5) */}
+                    <Text style={styles.ratingText}>
+                        {rating > 0 ? (
+                            <Text style={styles.ratingValue}>{rating / 2}</Text>
+                        ) : (
+                            <Text style={styles.ratingValue}>-</Text>
+                        )}
+                        <Text style={styles.ratingScale}> / 5</Text>
+                    </Text>
+                </View>
+
+                {/* Note Input */}
+                <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Add a note (optional)</Text>
                     <TextInput
                         style={styles.input}
                         placeholder="Thoughts? Struggles? Victory?"
@@ -86,28 +134,35 @@ export default function SessionCompletionModal({
                         onChangeText={(text) => setMessage(text.slice(0, 100))}
                         multiline
                         maxLength={100}
+                        textAlignVertical="top"
                     />
                     <Text style={styles.charCount}>{message.length}/100</Text>
                 </View>
 
-                {/* Actions */}
+                {/* Actions (VECCHI BOTTONI RIPRISTINATI) */}
                 <View style={styles.actionButtons}>
                     <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={onDelete}
+                        disabled={isSubmitting}
                     >
                         <Text style={styles.deleteButtonText}>Delete</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.publishButton}
-                        onPress={() => onPublish(message, rating)}
+                        onPress={handlePublish}
+                        disabled={isSubmitting}
                     >
                         <LinearGradient
                             colors={[theme.colors.success, theme.colors.successLight]}
                             style={styles.gradient}
                         >
-                            <Text style={styles.publishButtonText}>Publish</Text>
+                            {isSubmitting ? (
+                                <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                                <Text style={styles.publishButtonText}>Publish</Text>
+                            )}
                         </LinearGradient>
                     </TouchableOpacity>
                 </View>
@@ -116,12 +171,7 @@ export default function SessionCompletionModal({
     );
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="slide"
-            onRequestClose={onDelete}
-        >
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             {Platform.OS === 'web' ? (
                 content
             ) : (
@@ -140,64 +190,104 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: theme.spacing.lg,
     },
-    dialog: {
+    container: {
         backgroundColor: theme.colors.surface,
         borderRadius: theme.borderRadius.xl,
         padding: theme.spacing.xl,
         borderWidth: 1,
         borderColor: theme.colors.border,
-        ...theme.shadows.lg,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        elevation: 10,
     },
     header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: theme.spacing.xl,
-        position: 'relative',
-    },
-    closeButton: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        padding: theme.spacing.sm,
-        zIndex: 1,
-    },
-    emoji: {
-        fontSize: 48,
-        marginBottom: theme.spacing.sm,
     },
     title: {
-        fontSize: theme.fontSize.xxl,
-        fontWeight: theme.fontWeight.bold,
+        fontSize: 24,
+        fontWeight: 'bold',
         color: theme.colors.text,
-        marginBottom: theme.spacing.xs,
     },
-    subtitle: {
-        fontSize: theme.fontSize.sm,
-        color: theme.colors.textSecondary,
+    closeButton: {
+        padding: 4,
     },
-    section: {
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        backgroundColor: theme.colors.background,
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.lg,
         marginBottom: theme.spacing.xl,
     },
-    label: {
-        fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.bold,
-        color: theme.colors.text,
-        marginBottom: theme.spacing.md,
-    },
-    ratingContainer: {
-        flexDirection: 'row',
+    statItem: {
         alignItems: 'center',
-        justifyContent: 'center',
+    },
+    statLabel: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    statValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: theme.colors.text,
+    },
+    divider: {
+        width: 1,
+        height: '80%',
+        backgroundColor: theme.colors.border,
+    },
+    ratingSection: {
+        alignItems: 'center',
+        marginBottom: theme.spacing.xl,
+    },
+    sectionTitle: {
+        fontSize: theme.fontSize.lg,
+        color: theme.colors.text,
+        fontWeight: '600',
         marginBottom: theme.spacing.md,
     },
-    // Removed old rating styles
+    ratingText: {
+        marginTop: theme.spacing.md,
+        fontSize: 18,
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    ratingValue: {
+        fontWeight: 'bold',
+        color: theme.colors.primary,
+        fontSize: 24,
+    },
+    ratingScale: {
+        color: theme.colors.textSecondary,
+        fontSize: 18,
+    },
+    inputContainer: {
+        marginBottom: theme.spacing.xl,
+    },
+    inputLabel: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+        marginBottom: theme.spacing.sm,
+        marginLeft: 4,
+    },
     input: {
-        backgroundColor: theme.colors.surfaceLight,
+        backgroundColor: theme.colors.background, // Sfondo scuro input
         borderRadius: theme.borderRadius.lg,
         padding: theme.spacing.md,
         color: theme.colors.text,
-        height: 80,
-        textAlignVertical: 'top',
         fontSize: theme.fontSize.md,
+        height: 100,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
     },
     charCount: {
         textAlign: 'right',
@@ -205,6 +295,8 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.xs,
         marginTop: 4,
     },
+    
+    // --- STILI BOTTONI VECCHI RIPRISTINATI ---
     actionButtons: {
         flexDirection: 'row',
         gap: theme.spacing.md,
@@ -214,7 +306,7 @@ const styles = StyleSheet.create({
         paddingVertical: theme.spacing.md,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)', // Rosso chiaro trasparente
         borderRadius: theme.borderRadius.lg,
     },
     deleteButtonText: {
@@ -225,7 +317,7 @@ const styles = StyleSheet.create({
     publishButton: {
         flex: 2,
         borderRadius: theme.borderRadius.lg,
-        overflow: 'hidden',
+        overflow: 'hidden', // Importante per il gradiente
     },
     gradient: {
         paddingVertical: theme.spacing.md,

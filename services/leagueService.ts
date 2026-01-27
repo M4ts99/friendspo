@@ -138,5 +138,21 @@ export const leagueService = {
 
         // Converti in array e ordina (per numero di sessioni, poi durata)
         return Array.from(statsMap.values()).sort((a, b) => b.totalSessions - a.totalSessions);
-    }
+    },
+
+    // 6. Esci da una lega
+    async leaveLeague(leagueId: string, userId: string) {
+        // Aggiungiamo { count: 'exact' } per sapere quante righe sono state toccate
+        const { error, count } = await supabase
+            .from('league_members')
+            .delete({ count: 'exact' }) 
+            .match({ league_id: leagueId, user_id: userId });
+
+        if (error) throw error;
+
+        // Se count è 0, significa che non ha cancellato nulla (probabilmente problema di permessi RLS)
+        if (count === 0) {
+            throw new Error("Unable to leave league. Check database permissions or if you are the creator.");
+        }
+    },
 };

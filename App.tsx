@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { theme } from './styles/theme';
 import { authService } from './services/authService';
+import * as Notifications from 'expo-notifications';
 
 // Screens
 import WelcomeScreen from './screens/WelcomeScreen';
@@ -17,11 +18,23 @@ import { Home, BarChart2, Activity, Settings, Trophy } from 'lucide-react-native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './services/supabase';
 import { enableScreens } from 'react-native-screens';
+import { usePushNotifications } from './hooks/usePushNotification';
 
 const Tab = createBottomTabNavigator();
 
 // Enable native screens for better performance
 enableScreens(false);
+
+// Configurazione globale: mostra SEMPRE il banner, anche ad app aperta
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,   // <--- Questo fa apparire il banner visivo
+    shouldPlaySound: true,   // <--- Questo fa il suono/vibrazione
+    shouldSetBadge: false,
+    shouldShowBanner: true,  // <--- Importante per iOS moderni
+    shouldShowList: true,
+  }),
+});
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -36,6 +49,8 @@ export default function App() {
       return { ...prevUser, ...updatedFields };
     });
   };
+
+  usePushNotifications(user?.id);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -89,7 +104,7 @@ export default function App() {
              console.log('Utente loggato tramite link di recupero. Rimango su WelcomeScreen.');
              // Importante: aggiorniamo lo user nello stato locale per permettere l'updateUser
              if (session?.user) {
-                 setUser(session.user); 
+                setUser(session.user); 
              }
              setIsLoading(false);
              return; 
@@ -319,9 +334,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    paddingTop: theme.spacing.sm,
-    height: Platform.OS === 'ios' ? 90 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+    paddingTop: 12,
+    height: Platform.OS === 'ios' ? 90 : undefined,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
   },
   tabBarLabel: {
     fontSize: theme.fontSize.xs,

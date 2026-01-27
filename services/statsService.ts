@@ -120,16 +120,26 @@ export const statsService = {
 
     // Get calendar data for a month
     async getCalendarData(userId: string, year: number, month: number): Promise<CalendarDay[]> {
+        // Calcola inizio e fine mese (mese è 0-indexed: 0=Gen, 11=Dic)
         const startDate = new Date(year, month, 1);
-        const endDate = new Date(year, month + 1, 0);
+        const endDate = new Date(year, month + 1, 0); // Giorno 0 del mese dopo = ultimo del mese corrente
 
         const sessions = await sessionService.getSessionsInRange(userId, startDate, endDate);
 
-        // Group sessions by date
+        // Group sessions by date (USING LOCAL DATE)
         const sessionsByDate: { [key: string]: number } = {};
+        
         sessions.forEach((session) => {
-            const date = new Date(session.started_at).toISOString().split('T')[0];
-            sessionsByDate[date] = (sessionsByDate[date] || 0) + 1;
+            // Convertiamo la data UTC del DB in data Locale dell'utente
+            const d = new Date(session.started_at);
+            
+            // Costruiamo la stringa YYYY-MM-DD basata sull'orario locale
+            const yearStr = d.getFullYear();
+            const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+            const dayStr = String(d.getDate()).padStart(2, '0');
+            const dateStr = `${yearStr}-${monthStr}-${dayStr}`;
+            
+            sessionsByDate[dateStr] = (sessionsByDate[dateStr] || 0) + 1;
         });
 
         // Generate calendar days
@@ -137,8 +147,11 @@ export const statsService = {
         const daysInMonth = endDate.getDate();
 
         for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(year, month, day);
-            const dateStr = date.toISOString().split('T')[0];
+            // Costruiamo la stringa "manualmente" per evitare che toISOString() sposti il giorno indietro/avanti per il fuso orario
+            const currentMonthStr = String(month + 1).padStart(2, '0');
+            const currentDayStr = String(day).padStart(2, '0');
+            const dateStr = `${year}-${currentMonthStr}-${currentDayStr}`;
+            
             const sessionCount = sessionsByDate[dateStr] || 0;
 
             calendarDays.push({
@@ -215,20 +228,37 @@ export const statsService = {
         return 'Very Irregular 🔴';
     },
 
-    // Get friends leaderboard by category
+    // Get friends leaderboard by category (INCLUSO L'UTENTE CORRENTE)
     async getFriendsLeaderboard(
         userId: string,
         category: 'streak' | 'speed' | 'activity' | 'consistency'
     ): Promise<Array<{ user: any; score: number; rank: number }>> {
+        // Importa i servizi necessari
         const { friendService } = require('./friendService');
+        const { supabase } = require('./supabase'); // Assicurati che supabase sia accessibile qui
+
+        // 1. Recupera gli amici
         const friends = await friendService.getFriends(userId);
 
-        if (friends.length === 0) return [];
+        // 2. Recupera l'utente corrente (TU)
+        const { data: currentUser } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
 
-        // Calculate scores for each friend
-        const friendScores = await Promise.all(
-            friends.map(async (friend: any) => {
-                const stats = await this.calculateStats(friend.id);
+        // 3. Crea una lista unica di partecipanti (Amici + Tu)
+        const competitors = [...friends];
+        if (currentUser) {
+            competitors.push(currentUser);
+        }
+
+        if (competitors.length === 0) return [];
+
+        // 4. Calcola i punteggi per TUTTI i partecipanti
+        const competitorScores = await Promise.all(
+            competitors.map(async (user: any) => {
+                const stats = await this.calculateStats(user.id);
                 let score = 0;
 
                 switch (category) {
@@ -247,22 +277,28 @@ export const statsService = {
                 }
 
                 return {
-                    user: friend,
-                    score,
+                    user: user,
+                    score: score,
                 };
             })
         );
 
-        // Sort based on category (speed: lower is better, others: higher is better)
-        friendScores.sort((a, b) => {
+        // 5. Ordina la classifica
+        competitorScores.sort((a, b) => {
             if (category === 'speed') {
+                // Per la velocità, il valore più basso vince (es. meno tempo sul water?)
+                // Se invece "speed" intendi "durata media", e più alto è meglio, inverti questo.
+                // Assumiamo che per "speed", meno tempo è meglio:
+                if (a.score === 0) return 1; // Penalizza chi ha 0 (nessun dato)
+                if (b.score === 0) return -1;
                 return a.score - b.score;
             }
+            // Per le altre categorie, il valore più alto vince
             return b.score - a.score;
         });
 
-        // Add rank
-        return friendScores.map((item, index) => ({
+        // 6. Assegna il rango
+        return competitorScores.map((item, index) => ({
             ...item,
             rank: index + 1,
         }));

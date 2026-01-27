@@ -107,7 +107,6 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
     };
 
     return (
-        // 2. SOSTITUISCI VIEW CON SCREENCONTAINER
         <ScreenContainer>
             {/* Toggle Buttons */}
             <View style={styles.toggleContainer}>
@@ -148,7 +147,6 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
 
             <ScrollView
                 style={styles.scrollView}
-                // 3. Importante: contentContainerStyle per il padding finale
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -300,36 +298,49 @@ export default function StatsScreen({ userId }: StatsScreenProps) {
                                     </Text>
                                 </View>
                             ) : (
-                                leaderboard.map((item, index) => (
-                                    <View key={item.user.id} style={styles.leaderboardItem}>
-                                        <View style={styles.leaderboardRank}>
-                                            <Text style={[
-                                                styles.rankText,
-                                                index === 0 && styles.rankTextGold,
-                                                index === 1 && styles.rankTextSilver,
-                                                index === 2 && styles.rankTextBronze,
-                                            ]}>
-                                                #{item.rank}
-                                            </Text>
-                                        </View>
+                                leaderboard.map((item, index) => {
+                                    const isMe = item.user.id === userId;
 
-                                        <View style={styles.leaderboardContent}>
-                                            <Text style={styles.leaderboardNickname}>
-                                                {item.user.nickname}
-                                            </Text>
-                                            <Text style={styles.leaderboardScore}>
-                                                {formatLeaderboardScore(item.score, leaderboardCategory)}
-                                            </Text>
-                                        </View>
+                                    return (
+                                        <View 
+                                            key={item.user.id} 
+                                            style={[
+                                                styles.leaderboardItem,
+                                                isMe && styles.leaderboardItemMe // Stile aggiuntivo per te
+                                            ]}
+                                        >
+                                            <View style={styles.leaderboardRank}>
+                                                <Text style={[
+                                                    styles.rankText,
+                                                    index === 0 && styles.rankTextGold,
+                                                    index === 1 && styles.rankTextSilver,
+                                                    index === 2 && styles.rankTextBronze,
+                                                ]}>
+                                                    #{item.rank}
+                                                </Text>
+                                            </View>
 
-                                        {index < 3 && (
-                                            <Medal
-                                                size={24}
-                                                color={index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32'}
-                                            />
-                                        )}
-                                    </View>
-                                ))
+                                            <View style={styles.leaderboardContent}>
+                                                <Text style={[
+                                                    styles.leaderboardNickname,
+                                                    isMe && { color: theme.colors.primary } // Colore evidenziato per te
+                                                ]}>
+                                                    {item.user.nickname} {isMe ? '(You)' : ''}
+                                                </Text>
+                                                <Text style={styles.leaderboardScore}>
+                                                    {formatLeaderboardScore(item.score, leaderboardCategory)}
+                                                </Text>
+                                            </View>
+
+                                            {index < 3 && (
+                                                <Medal
+                                                    size={24}
+                                                    color={index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32'}
+                                                />
+                                            )}
+                                        </View>
+                                    );
+                                })
                             )}
                         </View>
                     </>
@@ -593,5 +604,10 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.md,
         color: theme.colors.textSecondary,
         textAlign: 'center',
+    },
+    leaderboardItemMe: {
+        backgroundColor: theme.colors.surfaceLight,
+        borderLeftWidth: 4,
+        borderLeftColor: theme.colors.primary,
     },
 });
